@@ -201,8 +201,6 @@ struct Serializer<T> {
             result += "\\t";
          } else if (*it == '"') {
             result += "\\\"";
-         } else if (*it == '\'') {
-            result += "\\'";
          } else if (*it >= 0 && *it <= 0x1f) {
             auto h = *it & 0xF;
             result += std::string{"\\u00"} + (*it & 0x10 ? "1" : "0")
