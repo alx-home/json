@@ -1,17 +1,17 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(json LANGUAGES CXX)
+project(alx-home_json LANGUAGES CXX)
 
-add_library(json src/json.cpp)
-add_library(alx-home::json ALIAS json)
+add_library(alx-home_json src/json.cpp)
+add_library(alx-home::json ALIAS alx-home_json)
 
-set_target_properties(json PROPERTIES LINKER_LANGUAGE CXX)
-set_target_properties(json PROPERTIES CXX_STANDARD 26)
-set_target_properties(json PROPERTIES CMAKE_CXX_STANDARD_REQUIRED ON)
-set_target_properties(json PROPERTIES CMAKE_CXX_EXTENSIONS ON)
+set_target_properties(alx-home_json PROPERTIES LINKER_LANGUAGE CXX)
+set_target_properties(alx-home_json PROPERTIES CXX_STANDARD 26)
+set_target_properties(alx-home_json PROPERTIES CMAKE_CXX_STANDARD_REQUIRED ON)
+set_target_properties(alx-home_json PROPERTIES CMAKE_CXX_EXTENSIONS ON)
 
-target_include_directories(json INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
-target_include_directories(json PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include/json")
+target_include_directories(alx-home_json INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_include_directories(alx-home_json PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include/json")
 
 
 set(COMPILE_OPTIONS
@@ -40,9 +40,9 @@ endif(DEFINED SANITIZE)
 
 if(MSVC)
     list(TRANSFORM COMPILE_OPTIONS PREPEND "-clang:")
-    target_compile_options(json PUBLIC /W4 ${COMPILE_OPTIONS})
+    target_compile_options(alx-home_json PUBLIC /W4 ${COMPILE_OPTIONS})
 else()
-    target_compile_options(json PUBLIC 
+    target_compile_options(alx-home_json PUBLIC 
         -export-dynamic
         -ggdb3 -pg -g
         ${COMPILE_OPTIONS}
