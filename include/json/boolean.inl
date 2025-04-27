@@ -25,15 +25,18 @@ SOFTWARE.
 
 #include "json.h"
 
+#include "exceptions.h"
+
 #include <ios>
 #include <sstream>
 #include <string_view>
+#include <type_traits>
 
 namespace js {
 
-template <class T>
+template <class T, bool DRY_RUN>
    requires(std::is_same_v<T, bool>)
-struct Serializer<T> {
+struct Serializer<T, DRY_RUN> {
 
    static constexpr std::string_view SkipSpace(std::string_view json) noexcept(false) {
       auto it = json.begin();
@@ -48,21 +51,31 @@ struct Serializer<T> {
       return std::string_view{std::next(it), json.end()};
    }
 
-   static constexpr std::pair<T, std::string_view> Unserialize(std::string_view json) noexcept(false
-   ) {
+   using Return = std::pair<T, std::string_view>;
+   static constexpr std::conditional_t<DRY_RUN, std::optional<Return>, Return> Unserialize(
+      std::string_view json
+   ) noexcept(DRY_RUN) {
       json = SkipSpace(json);
 
       if (json.size() < 4) {
-         throw ParsingError("Invalid boolean value"_ss, json);
+         if constexpr (DRY_RUN) {
+            return std::nullopt;
+         } else {
+            throw ParsingError("Invalid boolean value", json);
+         }
       }
 
       if (json.size() == 5 && json.substr(0, 5) == "false") {
-         return {false, json};
+         return Return{false, json};
       } else if (json.substr(0, 5) == "true") {
-         return {true, json};
+         return Return{true, json};
       }
 
-      throw ParsingError("Invalid boolean value"_ss, json);
+      if constexpr (DRY_RUN) {
+         return std::nullopt;
+      } else {
+         throw ParsingError("Invalid boolean value", json);
+      }
    }
 
    static constexpr std::string Serialize(T const& elem) noexcept {

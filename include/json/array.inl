@@ -25,7 +25,10 @@ SOFTWARE.
 #pragma once
 
 #include "json.h"
+#include "struct.inl"
 
+#include <format>
+#include <optional>
 #include <string_view>
 #include <tuple>
 #include <type_traits>
@@ -39,12 +42,35 @@ concept is_indexable = requires(T a) {
    { std::get<0>(a) };
 };
 
+template <bool RESULT, class... T> struct SparseOptionalHelper;
+template <class... T> struct SparseOptionalHelper<false, T...> : std::false_type {};
+template <> struct SparseOptionalHelper<true> : std::true_type {};
+
+template <class T, class... OTHER>
+struct SparseOptionalHelper<true, T, OTHER...>
+   : std::bool_constant<
+        IS_OPTIONAL<T> ? (IS_OPTIONAL<OTHER>&&...) : SparseOptionalHelper<true, OTHER...>::value> {
+};
+
+template <class T> struct SparseOptional;
+template <class... T>
+struct SparseOptional<std::tuple<T...>>
+   : std::bool_constant<SparseOptionalHelper<true, T...>::value> {};
+
 template <class T>
-   requires(is_indexable<T> && !std::is_same_v<T, std::string>)
-struct Serializer<T> {
+concept not_sparse_optional = requires(T a) {
+   { std::tuple_size_v<T> > 0 };
+   { SparseOptional<T>::value };
+};
+
+template <class T, bool DRY_RUN>
+   requires(is_indexable<T> && !std::is_same_v<T, std::string> && not_sparse_optional<T>)
+struct Serializer<T, DRY_RUN> {
    enum SearchType { OPENING, CLOSING, NEXT };
+
    template <SearchType SEARCH_TYPE>
-   static constexpr std::string_view Find(std::string_view json) noexcept(false) {
+   static constexpr std::conditional_t<DRY_RUN, std::optional<std::string_view>, std::string_view>
+   Find(std::string_view json) noexcept(DRY_RUN) {
       auto it = json.begin();
       for (; it != json.end(); ++it) {
          if (*it == ' ' || *it == '\t' || *it == '\n' || *it == '\r') {
@@ -63,12 +89,19 @@ struct Serializer<T> {
                   break;
                }
             }
-            throw ParsingError("Unexpected char : "_ss << *it, json);
+
+            if constexpr (DRY_RUN) {
+               return std::nullopt;
+            } else {
+               throw ParsingError(std::format("Unexpected char : \"{}\"", *it), json);
+            }
          }
       }
 
       if (it == json.end()) {
-         if constexpr (SEARCH_TYPE == OPENING) {
+         if constexpr (DRY_RUN) {
+            return std::nullopt;
+         } else if constexpr (SEARCH_TYPE == OPENING) {
             throw ParsingError("Opening bracket not found", json);
          } else {
             throw ParsingError("Closing bracket not found", json);
@@ -78,38 +111,129 @@ struct Serializer<T> {
       return std::string_view{std::next(it), json.end()};
    }
 
-   static constexpr std::pair<T, std::string_view> Unserialize(std::string_view json) noexcept(false
-   ) {
-      json = Find<OPENING>(json);
+   using Return = std::pair<T, std::string_view>;
+   static constexpr std::conditional_t<DRY_RUN, std::optional<Return>, Return> Unserialize(
+      std::string_view json
+   ) noexcept(DRY_RUN) {
+      if constexpr (DRY_RUN) {
+         if (auto result = Find<OPENING>(json); result) {
+            json = *result;
+         } else {
+            return std::nullopt;
+         }
+      } else {
+         json = Find<OPENING>(json);
+      }
 
+      bool error  = false;
+      bool end    = false;
       auto result = [&]<std::size_t... INDEX>(std::index_sequence<INDEX...>) constexpr {
          return std::tuple{[&]() constexpr {
-            if constexpr (INDEX) {
-               json = Find<NEXT>(json);
+            using ElemType = std::tuple_element_t<INDEX, T>;
+            using Return   = std::conditional_t<DRY_RUN, std::optional<ElemType>, ElemType>;
+            if constexpr (IS_OPTIONAL<ElemType>) {
+               if (end) {
+                  return Return{std::nullopt};
+               }
             }
 
-            auto [value, next] = Serializer<std::tuple_element_t<INDEX, T>>::Unserialize(json);
-            json               = next;
+            if constexpr (DRY_RUN) {
+               if (error) {
+                  return Return{std::nullopt};
+               }
+            }
 
-            return std::move(value);
+            if constexpr (INDEX) {
+               if constexpr (DRY_RUN) {
+                  if (auto result = Find<NEXT>(json); result) {
+                     json = *result;
+                  } else {
+                     error = true;
+                     return Return{std::nullopt};
+                  }
+               } else {
+                  json = Find<NEXT>(json);
+               }
+            }
+
+            using SerializeType =
+               std::conditional_t<IS_OPTIONAL<ElemType>, typename ElemType::value_type, ElemType>;
+
+            if constexpr (IS_OPTIONAL<ElemType>) {
+               if (auto result = Serializer<SerializeType, true>::Unserialize(json); result) {
+                  auto [value, next] = *result;
+                  json               = next;
+                  return Return{std::move(value)};
+               } else {
+                  end = true;
+                  return Return{std::nullopt};
+               }
+            } else if constexpr (DRY_RUN) {
+               if (auto opt_result = Serializer<SerializeType, DRY_RUN>::Unserialize(json);
+                   opt_result) {
+                  auto [value, next] = *opt_result;
+                  json               = next;
+                  return Return{std::move(value)};
+               } else {
+                  error = true;
+                  return Return{std::nullopt};
+               }
+            } else {
+               auto [value, next] = Serializer<SerializeType, DRY_RUN>::Unserialize(json);
+               json               = next;
+               return Return{std::move(value)};
+            }
          }()...};
       }(std::make_index_sequence<std::tuple_size_v<T>>());
 
-      json = Find<CLOSING>(json);
+      if constexpr (DRY_RUN && error) {
+         return std::nullopt;
+      }
+
+      if constexpr (DRY_RUN) {
+         if (auto result = Find<CLOSING>(json); result) {
+            json = *result;
+         } else {
+            return std::nullopt;
+         }
+      } else {
+         json = Find<CLOSING>(json);
+      }
+
       return {result, json};
    }
 
-   static constexpr std::string Serialize(T const& elem) noexcept {
-      std::string result = "[";
-      for (auto const& value : elem) {
-         if (result.size() == 1) {
-            result += Serialize(value);
-         } else {
-            result += "," + Serialize(value);
-         }
-      }
+   static constexpr std::string Serialize(T const& elem) noexcept(false) {
+      return "[" +
+             [&]<std::size_t... INDEX>(std::index_sequence<INDEX...>) constexpr {
+                return ([&]() constexpr {
+                   using ElemType = std::tuple_element_t<INDEX, T>;
 
-      return result + "]";
+                   if constexpr (IS_OPTIONAL<ElemType>) {
+                      if (!std::get<INDEX>(elem)) {
+                         return "";
+                      }
+
+                      if constexpr (INDEX) {
+                         return ","
+                                + Serializer<typename ElemType::value_type>::Serialize(
+                                   *std::get<INDEX>(elem)
+                                );
+                      } else {
+                         return Serializer<typename ElemType::value_type>::Serialize(
+                            *std::get<INDEX>(elem)
+                         );
+                      }
+                   } else {
+                      if constexpr (INDEX) {
+                         return "," + Serializer<ElemType>::Serialize(std::get<INDEX>(elem));
+                      } else {
+                         return Serializer<ElemType>::Serialize(std::get<INDEX>(elem));
+                      }
+                   }
+                }() + ...);
+             }(std::make_index_sequence<std::tuple_size_v<T>>())
+             + "]";
    }
 };
 }  // namespace js

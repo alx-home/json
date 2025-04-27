@@ -49,7 +49,7 @@ class Serializable {
    virtual Serializable* Unserialize() = 0;
 };
 
-template <class T> struct Serializer;
+template <class T, bool DRY_RUN = false> struct Serializer;
 
 }  // namespace js
 

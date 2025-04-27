@@ -26,17 +26,21 @@ SOFTWARE.
 
 #include "json.h"
 
+#include "exceptions.h"
+
 #include <cassert>
 #include <iterator>
+#include <optional>
 #include <sstream>
 #include <string_view>
 #include <tuple>
+#include <type_traits>
 
 namespace js {
 
-template <class T>
+template <class T, bool DRY_RUN>
    requires(std::is_fundamental_v<T> && !std::is_same_v<bool, T>)
-struct Serializer<T> {
+struct Serializer<T, DRY_RUN> {
    enum SearchType { NUMBER, NON_NULL_DIGIT, ZERO, SPACE, DOT, MINUS, MINUS_PLUS, EXPONENT };
    template <SearchType SEARCH_TYPE>
 
@@ -97,8 +101,10 @@ struct Serializer<T> {
       return {{it, json.end()}, std::distance(json.begin(), it)};
    }
 
-   static constexpr std::pair<T, std::string_view> Unserialize(std::string_view json) noexcept(false
-   ) {
+   using Return = std::pair<T, std::string_view>;
+   static constexpr std::conditional_t<DRY_RUN, std::optional<Return>, Return> Unserialize(
+      std::string_view json
+   ) noexcept(DRY_RUN) {
       std::size_t delta;
       std::tie(json, delta) = Skip<SPACE>(json);
 
@@ -116,7 +122,11 @@ struct Serializer<T> {
          size += delta;
 
          if (!delta) {
-            throw ParsingError("Number must not start with 0 if not null"_ss, json);
+            if constexpr (DRY_RUN) {
+               return std::nullopt;
+            } else {
+               throw ParsingError("Number must not start with 0 if not null", json);
+            }
          }
          assert(delta == 1);
 
@@ -133,7 +143,11 @@ struct Serializer<T> {
          size += delta;
 
          if (!delta) {
-            throw ParsingError("Missing digit after fraction"_ss, json);
+            if constexpr (DRY_RUN) {
+               return std::nullopt;
+            } else {
+               throw ParsingError("Missing digit after fraction", json);
+            }
          }
       }
 
@@ -149,7 +163,11 @@ struct Serializer<T> {
          size += delta;
 
          if (!delta) {
-            throw ParsingError("Missing digit after exponent"_ss, json);
+            if constexpr (DRY_RUN) {
+               return std::nullopt;
+            } else {
+               throw ParsingError("Missing digit after exponent", json);
+            }
          }
       }
 
@@ -157,7 +175,7 @@ struct Serializer<T> {
       std::stringstream ss{value};
       T                 result;
       ss >> result;
-      return {result, json};
+      return Return{result, json};
    }
 
    static constexpr std::string Serialize(T const& elem) noexcept {

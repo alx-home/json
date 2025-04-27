@@ -23,6 +23,8 @@ SOFTWARE.
 */
 
 #pragma once
+#include <format>
+#include <optional>
 #undef min
 
 #include "exceptions.h"
@@ -36,12 +38,12 @@ SOFTWARE.
 
 namespace js {
 
-template <class T>
+template <class T, bool DRY_RUN>
    requires(std::is_constructible_v<std::remove_cvref_t<T>, std::string_view> && std::is_constructible_v<std::string, std::remove_cvref_t<T>>)
-struct Serializer<T> {
+struct Serializer<T, DRY_RUN> {
 
-   static constexpr std::string_view FindOpening(std::string_view json, char& quote) noexcept(false
-   ) {
+   static constexpr std::conditional_t<DRY_RUN, std::optional<std::string_view>, std::string_view>
+   FindOpening(std::string_view json, char& quote) noexcept(DRY_RUN) {
       auto it = json.begin();
       for (; it != json.end(); ++it) {
          if (*it == ' ' || *it == '\t' || *it == '\n' || *it == '\r') {
@@ -51,19 +53,27 @@ struct Serializer<T> {
                quote = *it;
                break;
             }
-
-            throw ParsingError("Unexpected char : "_ss << *it, json);
+            if constexpr (DRY_RUN) {
+               return std::nullopt;
+            } else {
+               throw ParsingError(std::format("Unexpected char : \"{}\"", *it), json);
+            }
          }
       }
 
       if (it == json.end()) {
-         throw ParsingError("Opening quote not found", json);
+         if constexpr (DRY_RUN) {
+            return std::nullopt;
+         } else {
+            throw ParsingError("Opening quote not found", json);
+         }
       }
 
-      return {std::next(it), json.end()};
+      return std::string_view{std::next(it), json.end()};
    }
 
-   static constexpr auto UnicodeUtf8(uint32_t unicode, std::string_view json) {
+   static constexpr std::conditional_t<DRY_RUN, std::optional<std::string>, std::string>
+   UnicodeUtf8(uint32_t unicode, std::string_view json) noexcept(DRY_RUN) {
       std::string result;
 
       if (unicode <= 0x7F) {
@@ -85,14 +95,19 @@ struct Serializer<T> {
          result[2] = (0x80 | ((unicode >> 6) & 0x3F));
          result[3] = (0x80 | (unicode & 0x3F));
       } else {
-         throw ParsingError("Invalid utf8 sequence", json);
+         if constexpr (DRY_RUN) {
+            return std::nullopt;
+         } else {
+            throw ParsingError("Invalid utf8 sequence", json);
+         }
       }
 
       return result;
    }
 
-   static constexpr std::pair<std::string_view, std::string>
-   ParseString(std::string_view json, char quote) {
+   using StringReturn = std::pair<std::string_view, std::string>;
+   static constexpr std::conditional_t<DRY_RUN, std::optional<StringReturn>, StringReturn>
+   ParseString(std::string_view json, char quote) noexcept(DRY_RUN) {
       auto        it = json.begin();
       std::string result{};
 
@@ -100,14 +115,28 @@ struct Serializer<T> {
          if (*it == '\\') {
             ++it;
             if (it == json.end()) {
-               throw ParsingError("Invalid escape sequence", json);
+               if constexpr (DRY_RUN) {
+                  return std::nullopt;
+               } else {
+                  throw ParsingError("Invalid escape sequence", json);
+               }
             }
 
             if (*it == 'u') {
                ++it;
                std::string unicode{};
-               std::tie(unicode, json) = ParseUnicode({it, json.end()});
-               it                      = json.begin();
+
+               if constexpr (DRY_RUN) {
+                  if (auto result = ParseUnicode({it, json.end()}); !result) {
+                     return std::nullopt;
+                  } else {
+                     std::tie(json, unicode) = *result;
+                  }
+               } else {
+                  std::tie(json, unicode) = ParseUnicode({it, json.end()});
+               }
+
+               it = json.begin();
 
                result += unicode;
             } else {
@@ -130,25 +159,38 @@ struct Serializer<T> {
                } else if (*it == '\'') {
                   result += '\'';
                } else {
-                  throw ParsingError("Invalid escape sequence", json);
+                  if constexpr (DRY_RUN) {
+                     return std::nullopt;
+                  } else {
+                     throw ParsingError("Invalid escape sequence", json);
+                  }
                }
 
                ++it;
             }
          } else if (*it == quote) {
-            return {{std::next(it), json.end()}, result};
+            return StringReturn{{std::next(it), json.end()}, result};
          } else {
             result += *it;
             ++it;
          }
       }
-
-      throw ParsingError("Closing quote not found", json);
+      if constexpr (DRY_RUN) {
+         return std::nullopt;
+      } else {
+         throw ParsingError("Closing quote not found", json);
+      }
    }
 
-   static constexpr std::pair<std::string, std::string_view> ParseUnicode(std::string_view json) {
+   using StringReturn = std::pair<std::string_view, std::string>;
+   static constexpr std::conditional_t<DRY_RUN, std::optional<StringReturn>, StringReturn>
+   ParseUnicode(std::string_view json) noexcept(DRY_RUN) {
       if (json.size() < 4) {
-         throw ParsingError("Invalid unicode sequence", json);
+         if constexpr (DRY_RUN) {
+            return std::nullopt;
+         } else {
+            throw ParsingError("Invalid unicode sequence", json);
+         }
       }
 
       uint32_t    code{0};
@@ -167,26 +209,58 @@ struct Serializer<T> {
             code <<= shift;
             code |= 0xa + (*it - 'a');
          } else {
-            throw ParsingError("Invalid unicode sequence", json);
+            if constexpr (DRY_RUN) {
+               return std::nullopt;
+            } else {
+               throw ParsingError("Invalid unicode sequence", json);
+            }
          }
       }
 
       assert(shift == 24);
-      return {UnicodeUtf8(code, json), {it, json.end()}};
+      if constexpr (DRY_RUN) {
+         if (auto result = UnicodeUtf8(code, json); result) {
+            return StringReturn{{it, json.end()}, *result};
+         } else {
+            return std::nullopt;
+         }
+      } else {
+         return {{it, json.end()}, UnicodeUtf8(code, json)};
+      }
    }
 
-   static constexpr std::pair<T, std::string_view> Unserialize(std::string_view json) noexcept(false
-   ) {
+   using Return = std::pair<T, std::string_view>;
+   static constexpr std::conditional_t<DRY_RUN, std::optional<Return>, Return> Unserialize(
+      std::string_view json
+   ) noexcept(DRY_RUN) {
       char quote = '"';
 
-      json = FindOpening(json, quote);
-      std::string result;
-      std::tie(json, result) = ParseString(json, quote);
+      if constexpr (DRY_RUN) {
+         if (auto result = FindOpening(json, quote); !result) {
+            return std::nullopt;
+         } else {
+            json = *result;
+         }
+      } else {
+         json = FindOpening(json, quote);
+      }
 
-      return std::pair<T, std::string_view>{result, json};
+      std::string result;
+
+      if constexpr (DRY_RUN) {
+         if (auto opt_result = ParseString(json, quote); !opt_result) {
+            return std::nullopt;
+         } else {
+            std::tie(json, result) = *opt_result;
+         }
+      } else {
+         std::tie(json, result) = ParseString(json, quote);
+      }
+
+      return Return{result, json};
    }
 
-   static constexpr auto EscapeString(std::string_view string) {
+   static constexpr std::string EscapeString(std::string_view string) noexcept(false) {
       std::string result;
 
       for (auto it = string.begin(); it != string.end(); ++it) {
@@ -257,8 +331,8 @@ struct Serializer<T> {
       return result;
    }
 
-   static constexpr std::string Serialize(T const& elem) noexcept {
-      return "\"" + EscapeString(elem) + "\"";
+   static constexpr std::string Serialize(T const& elem) noexcept(false) {
+      return "\"" + Serializer<T>::EscapeString(elem) + "\"";
    }
 };
 

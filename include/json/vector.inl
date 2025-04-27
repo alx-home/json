@@ -26,6 +26,8 @@ SOFTWARE.
 
 #include "json.h"
 
+#include <optional>
+#include <stdexcept>
 #include <string_view>
 #include <type_traits>
 #include <utility>
@@ -35,12 +37,13 @@ namespace js {
 template <class T>
 concept is_resizable = requires(T a) { a.emplace_back(std::declval<typename T::value_type>()); };
 
-template <class T>
+template <class T, bool DRY_RUN>
    requires(is_resizable<T> && !std::is_same_v<T, std::string>)
-struct Serializer<T> {
+struct Serializer<T, DRY_RUN> {
    enum SearchType { OPENING, CLOSING, NEXT };
    template <SearchType SEARCH_TYPE>
-   static constexpr std::string_view Find(std::string_view json) noexcept(false) {
+   static constexpr std::conditional_t<DRY_RUN, std::optional<std::string_view>, std::string_view>
+   Find(std::string_view json) noexcept(DRY_RUN) {
       auto it = json.begin();
       for (; it != json.end(); ++it) {
          if (*it == ' ' || *it == '\t' || *it == '\n' || *it == '\r') {
@@ -59,12 +62,19 @@ struct Serializer<T> {
                   break;
                }
             }
-            throw ParsingError("Unexpected char : "_ss << *it, json);
+
+            if constexpr (DRY_RUN) {
+               return std::nullopt;
+            } else {
+               throw ParsingError(std::format("Unexpected char : \"{}\"", *it), json);
+            }
          }
       }
 
       if (it == json.end()) {
-         if constexpr (SEARCH_TYPE == OPENING) {
+         if constexpr (DRY_RUN) {
+            return std::nullopt;
+         } else if constexpr (SEARCH_TYPE == OPENING) {
             throw ParsingError("Opening bracket not found", json);
          } else {
             throw ParsingError("Closing bracket not found", json);
@@ -74,41 +84,71 @@ struct Serializer<T> {
       return std::string_view{std::next(it), json.end()};
    }
 
-   static constexpr std::pair<T, std::string_view> Unserialize(std::string_view json) noexcept(false
-   ) {
-      json = Find<OPENING>(json);
+   using Return = std::pair<T, std::string_view>;
+   static constexpr std::conditional_t<DRY_RUN, std::optional<Return>, Return> Unserialize(
+      std::string_view json
+   ) noexcept(DRY_RUN) {
+      if constexpr (DRY_RUN) {
+         if (auto result = Find<OPENING>(json); result) {
+            json = *result;
+         } else {
+            return std::nullopt;
+         }
+      } else {
+         json = Find<OPENING>(json);
+      }
 
       T           result{};
       std::size_t index = 0;
 
       while (true) {
-         try {
-            json = Find<CLOSING>(json);
+         if (auto result = Serializer<T, true>::Find<CLOSING>(json); result) {
+            json = *result;
             break;
-         } catch (ParsingError const&) {
          }
 
          if (index) {
-            json = Find<NEXT>(json);
+            if constexpr (DRY_RUN) {
+               if (auto result = Find<NEXT>(json); result) {
+                  json = *result;
+               } else {
+                  return std::nullopt;
+               }
+            } else {
+               json = Find<NEXT>(json);
+            }
          }
 
-         auto [value, next] = Serializer<typename T::value_type>::Unserialize(json);
-         json               = next;
+         if constexpr (DRY_RUN) {
+            if (auto opt_result = Serializer<typename T::value_type, DRY_RUN>::Unserialize(json);
+                opt_result) {
+               auto& [value, next] = *opt_result;
+               json                = next;
 
-         result.emplace_back(std::move(value));
-         ++index;
+               result.emplace_back(std::move(value));
+               ++index;
+            } else {
+               return std::nullopt;
+            }
+         } else {
+            auto& [value, next] = Serializer<typename T::value_type, DRY_RUN>::Unserialize(json);
+            json                = next;
+
+            result.emplace_back(std::move(value));
+            ++index;
+         }
       }
 
-      return {result, json};
+      return Return{result, json};
    }
 
-   static constexpr std::string Serialize(T const& elem) noexcept {
+   static constexpr std::string Serialize(T const& elem) noexcept(false) {
       std::string result = "[";
       for (auto const& value : elem) {
          if (result.size() == 1) {
-            result += Serialize(value);
+            result += Serializer<typename T::value_type>::Serialize(value);
          } else {
-            result += "," + Serialize(value);
+            result += "," + Serializer<typename T::value_type>::Serialize(value);
          }
       }
 

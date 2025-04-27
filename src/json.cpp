@@ -23,6 +23,7 @@ SOFTWARE.
 */
 
 #include "json.h"
+#include <format>
 
 std::stringstream
 operator""_ss(char const* str, unsigned long long) {
@@ -31,12 +32,7 @@ operator""_ss(char const* str, unsigned long long) {
 
 namespace js {
 
-ParsingError::ParsingError(std::stringstream&& message, std::string_view json)
-   : std::runtime_error(
-        (std::move(message) << " at pos " << (&json.front() - json.data()) << "!").str()
-     ) {}
-
 ParsingError::ParsingError(std::string_view message, std::string_view json)
-   : ParsingError(std::stringstream{message.data()}, json) {}
+   : std::runtime_error(std::format("{} at pos {}!", message, (&json.front() - json.data()))) {}
 
 }  // namespace js

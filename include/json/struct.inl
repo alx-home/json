@@ -27,11 +27,18 @@ SOFTWARE.
 #include "json.h"
 
 #include <optional>
+#include <stdexcept>
 #include <string_view>
 #include <tuple>
+#include <type_traits>
 #include <unordered_set>
+#include <utility>
 
 namespace js {
+
+template <class T> struct IsOptional : std::false_type {};
+template <class T> struct IsOptional<std::optional<T>> : std::true_type {};
+template <class T> static constexpr bool IS_OPTIONAL = IsOptional<T>::value;
 
 template <typename> struct IsMemptr : std::false_type {};
 template <typename T> struct IsMemptr<std::pair<std::string, T>> : std::true_type {};
@@ -54,14 +61,14 @@ concept is_reflectable = requires {
    }(std::make_index_sequence<std::tuple_size_v<decltype(T::PROTOTYPE)>>()))>::value;
 };
 
-template <class T>
+template <class T, bool DRY_RUN>
    requires(is_reflectable<T> && std::is_default_constructible_v<T>)
-struct Serializer<T> {
+struct Serializer<T, DRY_RUN> {
    enum SearchType { OPENING, CLOSING, NEXT, SEP };
 
-   enum Mode { TRY, EXCEPT };
-   template <SearchType SEARCH_TYPE, Mode MODE = EXCEPT>
-   static constexpr auto Find(std::string_view json) noexcept(false) {
+   template <SearchType SEARCH_TYPE>
+   static constexpr std::conditional_t<DRY_RUN, std::optional<std::string_view>, std::string_view>
+   Find(std::string_view json) noexcept(DRY_RUN) {
       auto it = json.begin();
       for (; it != json.end(); ++it) {
          if (*it == ' ' || *it == '\t' || *it == '\n' || *it == '\r') {
@@ -85,16 +92,18 @@ struct Serializer<T> {
                }
             }
 
-            if constexpr (MODE == EXCEPT) {
-               throw ParsingError("Unexpected char : "_ss << *it, json);
+            if constexpr (DRY_RUN) {
+               return std::nullopt;
             } else {
-               return std::optional<std::string_view>{};
+               throw ParsingError(std::format("Unexpected char : \"{}\"", *it), json);
             }
          }
       }
 
       if (it == json.end()) {
-         if constexpr (MODE == EXCEPT) {
+         if constexpr (DRY_RUN) {
+            return std::nullopt;
+         } else {
             if constexpr (SEARCH_TYPE == OPENING) {
                throw ParsingError("Opening brace not found", json);
             } else if constexpr (SEARCH_TYPE == NEXT || SEARCH_TYPE == CLOSING) {
@@ -102,50 +111,101 @@ struct Serializer<T> {
             } else if constexpr (SEARCH_TYPE == SEP) {
                throw ParsingError("Key/Prop separator not found", json);
             }
-         } else {
-            return std::optional<std::string_view>{};
          }
       }
-      if constexpr (MODE == EXCEPT) {
-         return std::string_view{std::next(it), json.end()};
-      } else {
-         return std::optional<std::string_view>{{std::next(it), json.end()}};
-      }
+
+      return std::string_view{std::next(it), json.end()};
    }
 
-   static constexpr std::pair<T, std::string_view> Unserialize(std::string_view json) noexcept(false
-   ) {
-      json = Find<OPENING>(json);
+   using Return = std::pair<T, std::string_view>;
+   static constexpr std::conditional_t<DRY_RUN, std::optional<Return>, Return> Unserialize(
+      std::string_view json
+   ) noexcept(false) {
+      if constexpr (DRY_RUN) {
+         if (auto result = Find<OPENING>(json); result) {
+            json = *result;
+         } else {
+            return std::nullopt;
+         }
+      } else {
+         json = Find<OPENING>(json);
+      }
 
       T                               result{};
       std::unordered_set<std::string> keys{};
+      std::unordered_set<std::string> required_keys{};
+      std::apply(
+         [&](auto const&... members) {
+            (
+               [&](auto const& member) {
+                  if constexpr (!IS_OPTIONAL<decltype(std::declval<T>().*member.second)>) {
+                     required_keys.emplace(member.first);
+                  }
+               }(members),
+               ...
+            );
+         },
+         T::PROTOTYPE
+      );
 
       while (true) {
-         {
-            auto result = Find<CLOSING, TRY>(json);
-            if (result.has_value()) {
-               json = result.value();
-               break;
-            }
+         if (auto result = Serializer<T, true>::template Find<Serializer<T, true>::CLOSING>(json);
+             result) {
+            json = *result;
+            break;
          }
 
          if (keys.size()) {
-            json = Find<NEXT>(json);
+            if constexpr (DRY_RUN) {
+               if (auto result = Find<NEXT>(json); result) {
+                  json = *result;
+               } else {
+                  return std::nullopt;
+               }
+            } else {
+               json = Find<NEXT>(json);
+            }
          }
 
          std::string key;
-         std::tie(key, json) = Serializer<std::string>::Unserialize(json);
-         if (!keys.emplace(key).second) {
-            throw ParsingError("Multiple value for key : "_ss << key, json);
+         if constexpr (DRY_RUN) {
+            if (auto result = Serializer<std::string, DRY_RUN>::Unserialize(json); result) {
+               std::tie(key, json) = *result;
+            } else {
+               return std::nullopt;
+            }
+         } else {
+            std::tie(key, json) = Serializer<std::string, DRY_RUN>::Unserialize(json);
          }
 
-         json = Find<SEP>(json);
+         if (!keys.emplace(key).second) {
+            if constexpr (DRY_RUN) {
+               return std::nullopt;
+            } else {
+               throw ParsingError(std::format("Multiple value for key : \"{}\"", key), json);
+            }
+         }
+
+         if constexpr (DRY_RUN) {
+            if (auto result = Find<SEP>(json); result) {
+               json = *result;
+            } else {
+               return std::nullopt;
+            }
+         } else {
+            json = Find<SEP>(json);
+         }
 
          bool found = false;
+         bool error = false;
          std::apply(
             [&](auto const&... members) constexpr {
                (
                   [&](auto const& member) constexpr {
+                     if constexpr (DRY_RUN && error) {
+                        return;
+                     }
+
                      if (member.first == key) {
                         if (found) {
                            throw std::runtime_error("We shall not be there...");
@@ -153,8 +213,19 @@ struct Serializer<T> {
 
                         found = true;
 
-                        std::tie(result.*member.second, json) = Serializer<
-                           std::remove_cvref_t<decltype(result.*member.second)>>::Unserialize(json);
+                        using ElemType = std::remove_cvref_t<decltype(result.*member.second)>;
+
+                        if constexpr (DRY_RUN) {
+                           if (auto opt_result = Serializer<ElemType, DRY_RUN>::Unserialize(json);
+                               opt_result) {
+                              std::tie(result.*member.second, json) = *opt_result;
+                           } else {
+                              error = true;
+                           }
+                        } else {
+                           std::tie(result.*member.second, json) =
+                              Serializer<ElemType, DRY_RUN>::Unserialize(json);
+                        }
                      }
                   }(members),
                   ...
@@ -163,30 +234,60 @@ struct Serializer<T> {
             T::PROTOTYPE
          );
 
+         if constexpr (DRY_RUN && error) {
+            return std::nullopt;
+         }
+
          if (!found) {
-            throw ParsingError("Unexpected object key : "_ss << key, json);
+            if constexpr (DRY_RUN) {
+               return std::nullopt;
+            } else {
+               throw ParsingError(std::format("Unexpected object key : \"{}\"", key), json);
+            }
          }
       }
 
-      if (keys.size() != std::tuple_size_v<decltype(T::PROTOTYPE)>) {
-         throw ParsingError("Missing object key", json);
+      for (auto const& key : required_keys) {
+         if (!keys.contains(key)) {
+            if constexpr (DRY_RUN) {
+               return std::nullopt;
+            } else {
+               throw ParsingError(std::format("Missing object key : \"{}\"", key), json);
+            }
+         }
       }
 
-      return {result, std::string_view{json.begin(), json.end()}};
+      return Return{result, std::string_view{json.begin(), json.end()}};
    }
 
-   static constexpr std::string Serialize(T const& elem) noexcept {
+   static constexpr std::string Serialize(T const& elem) noexcept(false) {
       std::string result = "{";
 
       std::apply(
          [&](auto const&... members) {
             (
                [&](auto const& member) {
-                  if (result.size() > 1) {
-                     result += ",";
-                  }
+                  using ElemType = std::remove_cvref_t<decltype(elem.*member.second)>;
 
-                  result += "\"" + member.first + "\":" + Serialize(elem.*member.second);
+                  if constexpr (IS_OPTIONAL<ElemType>) {
+                     if (elem.*member.second) {
+                        if (result.size() > 1) {
+                           result += ",";
+                        }
+
+                        result += "\"" + member.first + "\":"
+                                  + Serializer<typename ElemType::value_type>::Serialize(
+                                     *elem.*member.second
+                                  );
+                     }
+                  } else {
+                     if (result.size() > 1) {
+                        result += ",";
+                     }
+
+                     result += "\"" + member.first
+                               + "\":" + Serializer<ElemType>::Serialize(elem.*member.second);
+                  }
                }(members),
                ...
             );

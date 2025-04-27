@@ -24,7 +24,6 @@ SOFTWARE.
 #pragma once
 
 #include <exception>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 
@@ -35,7 +34,6 @@ struct SerializableException : std::exception {
 };
 
 struct ParsingError : std::runtime_error {
-   ParsingError(std::stringstream&& message, std::string_view json);
    ParsingError(std::string_view message, std::string_view json);
 };
 
