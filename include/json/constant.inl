@@ -27,17 +27,19 @@ SOFTWARE.
 
 #include "exceptions.h"
 
-#include <ios>
-#include <sstream>
 #include <string_view>
 #include <type_traits>
 
 namespace js {
 
-template <class T, bool DRY_RUN>
-   requires(std::is_same_v<T, bool>)
-struct Serializer<T, DRY_RUN> {
+template <class T> struct IsConstant : std::false_type {};
+template <utils::String STRING> struct IsConstant<Cst<STRING>> : std::true_type {};
 
+template <class T> static constexpr bool IS_CONSTANT = IsConstant<T>::value;
+
+template <class T, bool DRY_RUN>
+   requires(IS_CONSTANT<T>)
+struct Serializer<T, DRY_RUN> {
    static constexpr std::string_view SkipSpace(std::string_view json) noexcept(false) {
       auto it = json.begin();
       for (; it != json.end(); ++it) {
@@ -57,23 +59,50 @@ struct Serializer<T, DRY_RUN> {
    ) noexcept(DRY_RUN) {
       json = SkipSpace(json);
 
-      if (json.substr(0, 5) == "false") {
-         return Return{false, json.substr(5)};
-      } else if (json.substr(0, 4) == "true") {
-         return Return{true, json.substr(4)};
+      if (json.empty()) {
+         if constexpr (DRY_RUN) {
+            return std::nullopt;
+         } else {
+            throw ParsingError("Unexpected EOF", json);
+         }
+      }
+
+      char quote = '\"';
+      if (json.front() != '\"' || json.front() != '\'') {
+         if constexpr (DRY_RUN) {
+            return std::nullopt;
+         } else {
+            throw ParsingError("Opening quote not found", json);
+         }
+
+         quote = json.front();
+      }
+
+      if (json.starts_with(T::value_.data())) {
+         json = json.substr(T::value_.size());
+
+         if (json.empty() || json.front() != quote) {
+            if constexpr (DRY_RUN) {
+               return std::nullopt;
+            } else {
+               throw ParsingError(std::format("Closing quote \"{}\" not found", quote), json);
+            }
+         }
+
+         return Return{{}, json};
       }
 
       if constexpr (DRY_RUN) {
          return std::nullopt;
       } else {
-         throw ParsingError("Invalid boolean value", json);
+         throw ParsingError(
+            std::format("Invalid constant value (expected: \"{}\")", T::value_.data()), json
+         );
       }
    }
 
-   static constexpr std::string Serialize(T const& elem) noexcept {
-      std::stringstream ss;
-      ss << std::boolalpha << elem;
-      return ss.str();
+   static constexpr std::string Serialize(T const&) noexcept {
+      return "\"" + std::string(T::value_.data()) + "\"";
    }
 };
 

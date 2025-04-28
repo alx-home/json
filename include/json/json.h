@@ -23,12 +23,29 @@ SOFTWARE.
 */
 #pragma once
 
+#include <utils/String.h>
 #include <sstream>
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <variant>
 
 std::stringstream operator""_ss(char const* str, unsigned long long);
+std::string_view  operator""_sv(char const* str, unsigned long long);
+
+namespace js {
+template <utils::String...> struct Enum;
+}
+
+template <class TYPE, utils::String... VALUES>
+[[nodiscard]]
+constexpr auto operator<=>(js::Enum<VALUES...> const& lhs, TYPE const& rhs) noexcept;
+
+template <class TYPE, utils::String... VALUES>
+[[nodiscard]]
+constexpr auto operator<=>(TYPE const& lhs, js::Enum<VALUES...> const& rhs) noexcept;
+
+// @fixme 3-way comparision operator not used for string literals...
 
 namespace js {
 
@@ -51,9 +68,60 @@ class Serializable {
 
 template <class T, bool DRY_RUN = false> struct Serializer;
 
+using null = nullptr_t;
+
+template <utils::String STRING> struct Cst {
+   static constexpr auto VALUE = STRING;
+
+   std::string_view operator*() const { return VALUE.value_.data(); }
+};
+
+template <utils::String... VALUES> struct Enum : std::variant<js::Cst<VALUES>...> {
+   Enum(char const* value)
+      : Enum(std::string_view{value}) {}
+
+   Enum(std::string_view value)
+      : std::variant<js::Cst<VALUES>...>{[&value]() constexpr {
+         std::variant<js::Cst<VALUES>...> result;
+
+         bool found = false;
+         (
+            [&result, &value, &found]<utils::String VALUE>() constexpr {
+               if (found) {
+                  return;
+               }
+               if (value == std::string_view{VALUE.value_.data()}) {
+                  result = js::Cst<VALUE>{};
+                  found  = true;
+               }
+            }.template operator()<VALUES>(),
+            ...
+         );
+
+         if (!found) {
+            throw std::bad_variant_access();
+         }
+         return result;
+      }()} {}
+
+   explicit(false) operator std::string_view() const {
+      std::string_view result{};
+      (
+         [this, &result]<utils::String VALUE>() constexpr {
+            if (std::holds_alternative<js::Cst<VALUE>>(*this)) {
+               result = *std::get<js::Cst<VALUE>>(*this);
+            }
+         }.template operator()<VALUES>(),
+         ...
+      );
+      return result;
+   }
+};
+
 }  // namespace js
 
 #include "json.inl"
+
 #include "number.inl"
 #include "boolean.inl"
 #include "string.inl"
@@ -61,10 +129,9 @@ template <class T, bool DRY_RUN = false> struct Serializer;
 #include "vector.inl"
 #include "struct.inl"
 #include "variant.inl"
+#include "constant.inl"
 
 namespace js {
-
-using null = nullptr_t;
 
 template <class TYPE>
 static constexpr TYPE

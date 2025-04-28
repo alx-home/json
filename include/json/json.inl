@@ -21,6 +21,11 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
+#pragma once
+
+#include "json.h"
+
+#include "utils/String.h"
 
 #include <optional>
 #include <tuple>
@@ -38,4 +43,29 @@ concept is_tuple = requires { IsTupleT<T>::value; };
 template <class T> struct IsOptional : std::false_type {};
 template <class T> struct IsOptional<std::optional<T>> : std::true_type {};
 template <class T> static constexpr bool IS_OPTIONAL = IsOptional<T>::value;
+
+template <class T> struct OptionalValueHelper {
+   using type = T;
+};
+
+template <class T>
+   requires(IS_OPTIONAL<T>)
+struct OptionalValueHelper<T> {
+   using type = typename T::value_type;
+};
+
+template <class T> using OPTIONAL_VALUE_HELPER = typename OptionalValueHelper<T>::type;
+
 }  // namespace js
+
+template <class TYPE, utils::String... VALUES2>
+[[nodiscard]] constexpr auto
+operator<=>(js::Enum<VALUES2...> const& lhs, TYPE const& rhs) noexcept {
+   return static_cast<std::string_view>(lhs) <=> rhs;
+}
+
+template <class TYPE, utils::String... VALUES2>
+[[nodiscard]] constexpr auto
+operator<=>(TYPE const& lhs, js::Enum<VALUES2...> const& rhs) noexcept {
+   return lhs <=> static_cast<std::string_view>(rhs);
+}

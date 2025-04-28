@@ -155,8 +155,7 @@ struct Serializer<T, DRY_RUN> {
                }
             }
 
-            using SerializeType =
-               std::conditional_t<IS_OPTIONAL<ElemType>, typename ElemType::value_type, ElemType>;
+            using SerializeType = OPTIONAL_VALUE_HELPER<ElemType>;
 
             if constexpr (IS_OPTIONAL<ElemType>) {
                if (auto result = Serializer<SerializeType, true>::Unserialize(json); result) {
