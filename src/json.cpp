@@ -23,17 +23,8 @@ SOFTWARE.
 */
 
 #include "json.h"
+
 #include <format>
-
-std::stringstream
-operator""_ss(char const* str, unsigned long long size) {
-   return std::stringstream{{str, str + size}};
-}
-
-std::string_view
-operator""_sv(char const* str, unsigned long long size) {
-   return std::string_view{str, str + size};
-}
 
 namespace js {
 

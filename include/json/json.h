@@ -24,14 +24,10 @@ SOFTWARE.
 #pragma once
 
 #include <utils/String.h>
-#include <sstream>
 #include <string>
 #include <string_view>
 #include <type_traits>
 #include <variant>
-
-std::stringstream operator""_ss(char const* str, unsigned long long);
-std::string_view  operator""_sv(char const* str, unsigned long long);
 
 namespace js {
 template <utils::String...> struct Enum;
