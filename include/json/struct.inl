@@ -36,10 +36,6 @@ SOFTWARE.
 
 namespace js {
 
-template <class T> struct IsOptional : std::false_type {};
-template <class T> struct IsOptional<std::optional<T>> : std::true_type {};
-template <class T> static constexpr bool IS_OPTIONAL = IsOptional<T>::value;
-
 template <typename> struct IsMemptr : std::false_type {};
 template <typename T> struct IsMemptr<std::pair<std::string, T>> : std::true_type {};
 

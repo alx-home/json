@@ -27,17 +27,14 @@ SOFTWARE.
 
 #include "exceptions.h"
 
-#include <ios>
-#include <sstream>
 #include <string_view>
 #include <type_traits>
 
 namespace js {
 
 template <class T, bool DRY_RUN>
-   requires(std::is_same_v<T, bool>)
+   requires(std::is_same_v<T, js::null>)
 struct Serializer<T, DRY_RUN> {
-
    static constexpr std::string_view SkipSpace(std::string_view json) noexcept(false) {
       auto it = json.begin();
       for (; it != json.end(); ++it) {
@@ -65,24 +62,18 @@ struct Serializer<T, DRY_RUN> {
          }
       }
 
-      if (json.substr(0, 5) == "false") {
-         return Return{false, json.substr(5)};
-      } else if (json.substr(0, 4) == "true") {
-         return Return{true, json.substr(4)};
+      if (json.substr(0, 4) == "null") {
+         return Return{{}, json};
       }
 
       if constexpr (DRY_RUN) {
          return std::nullopt;
       } else {
-         throw ParsingError("Invalid boolean value", json);
+         throw ParsingError("Invalid null value", json);
       }
    }
 
-   static constexpr std::string Serialize(T const& elem) noexcept {
-      std::stringstream ss;
-      ss << std::boolalpha << elem;
-      return ss.str();
-   }
+   static constexpr std::string Serialize(T const&) noexcept { return "null"; }
 };
 
 }  // namespace js

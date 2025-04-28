@@ -27,61 +27,66 @@ SOFTWARE.
 
 #include "exceptions.h"
 
-#include <ios>
-#include <sstream>
 #include <string_view>
+#include <tuple>
 #include <type_traits>
+#include <variant>
 
 namespace js {
 
+template <class T> struct IsVariant : std::false_type {};
+template <class T> struct IsVariant<std::optional<T>> : std::true_type {};
+template <class T> static constexpr bool IS_VARIANT = IsVariant<T>::value;
+
 template <class T, bool DRY_RUN>
-   requires(std::is_same_v<T, bool>)
+   requires(IS_VARIANT<T>)
 struct Serializer<T, DRY_RUN> {
-
-   static constexpr std::string_view SkipSpace(std::string_view json) noexcept(false) {
-      auto it = json.begin();
-      for (; it != json.end(); ++it) {
-         if (*it == ' ' || *it == '\t' || *it == '\n' || *it == '\r') {
-            continue;
-         } else {
-            break;
-         }
-      }
-
-      return std::string_view{it, json.end()};
-   }
-
    using Return = std::pair<T, std::string_view>;
    static constexpr std::conditional_t<DRY_RUN, std::optional<Return>, Return> Unserialize(
       std::string_view json
    ) noexcept(DRY_RUN) {
-      json = SkipSpace(json);
+      T    result{};
+      bool found = false;
+      [&json, &found]<class... TYPES>(std::variant<TYPES...>& result) constexpr {
+         (([&json, &found, &result]<class TYPE>() constexpr {
+             if (found) {
+                return;
+             }
 
-      if (json.size() < 4) {
+             if (auto opt_result = Serializer<TYPE, true>::Unserialize(json); opt_result) {
+                found                  = true;
+                std::tie(result, json) = *opt_result;
+             }
+          }.template operator()<TYPES>()),
+          ...);
+      }(result);
+
+      if (!found) {
          if constexpr (DRY_RUN) {
             return std::nullopt;
          } else {
-            throw ParsingError("Invalid boolean value", json);
+            throw ParsingError("Invalid variant value", json);
          }
       }
 
-      if (json.substr(0, 5) == "false") {
-         return Return{false, json.substr(5)};
-      } else if (json.substr(0, 4) == "true") {
-         return Return{true, json.substr(4)};
-      }
-
-      if constexpr (DRY_RUN) {
-         return std::nullopt;
-      } else {
-         throw ParsingError("Invalid boolean value", json);
-      }
+      return result;
    }
 
    static constexpr std::string Serialize(T const& elem) noexcept {
-      std::stringstream ss;
-      ss << std::boolalpha << elem;
-      return ss.str();
+      bool found = false;
+      [&found]<class... TYPES>(std::variant<TYPES...>& elem) constexpr {
+         (([&found, &elem]<class TYPE>() constexpr {
+             if (found) {
+                return "";
+             }
+
+             if (std::holds_alternative<TYPE>(elem)) {
+                found = true;
+                return Serializer<TYPE>::Serialize(std::get<TYPE>(elem));
+             }
+          }.template operator()<TYPES>())
+          + ...);
+      }(elem);
    }
 };
 

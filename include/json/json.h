@@ -60,29 +60,22 @@ template <class T, bool DRY_RUN = false> struct Serializer;
 #include "array.inl"
 #include "vector.inl"
 #include "struct.inl"
+#include "variant.inl"
 
 namespace js {
 
-using empty = nullptr_t;
+using null = nullptr_t;
 
 template <class TYPE>
 static constexpr TYPE
 Parse(std::string_view json) noexcept(false) {
-   if constexpr (std::is_same_v<TYPE, empty>) {
-      return nullptr;
-   } else {
-      return Serializer<TYPE>::Unserialize(json).first;
-   }
+   return Serializer<TYPE>::Unserialize(json).first;
 }
 
 template <class TYPE>
 static constexpr std::tuple<TYPE, std::string_view>
 Pparse(std::string_view json) noexcept(false) {
-   if constexpr (std::is_same_v<TYPE, empty>) {
-      return {nullptr, json};
-   } else {
-      return Serializer<TYPE>::Unserialize(json);
-   }
+   return Serializer<TYPE>::Unserialize(json);
 }
 
 template <class TYPE>

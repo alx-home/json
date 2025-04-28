@@ -25,7 +25,6 @@ SOFTWARE.
 #pragma once
 
 #include "json.h"
-#include "struct.inl"
 
 #include <format>
 #include <optional>

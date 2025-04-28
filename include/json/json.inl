@@ -22,6 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+#include <optional>
 #include <tuple>
 #include <type_traits>
 
@@ -33,4 +34,8 @@ template <class... T> struct IsTupleT<std::tuple<T...>> : std::true_type {};
 
 template <class T>
 concept is_tuple = requires { IsTupleT<T>::value; };
+
+template <class T> struct IsOptional : std::false_type {};
+template <class T> struct IsOptional<std::optional<T>> : std::true_type {};
+template <class T> static constexpr bool IS_OPTIONAL = IsOptional<T>::value;
 }  // namespace js
