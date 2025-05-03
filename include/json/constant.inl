@@ -32,10 +32,13 @@ SOFTWARE.
 
 namespace js {
 
-template <class T> struct IsConstant : std::false_type {};
-template <utils::String STRING> struct IsConstant<Cst<STRING>> : std::true_type {};
+template <class T>
+struct IsConstant : std::false_type {};
+template <utils::String STRING>
+struct IsConstant<Cst<STRING>> : std::true_type {};
 
-template <class T> static constexpr bool IS_CONSTANT = IsConstant<T>::value;
+template <class T>
+static constexpr bool IS_CONSTANT = IsConstant<T>::value;
 
 template <class T, bool DRY_RUN>
    requires(IS_CONSTANT<T>)
@@ -54,8 +57,9 @@ struct Serializer<T, DRY_RUN> {
    }
 
    using Return = std::pair<T, std::string_view>;
+   template <class...>
    static constexpr std::conditional_t<DRY_RUN, std::optional<Return>, Return> Unserialize(
-      std::string_view json
+     std::string_view json
    ) noexcept(DRY_RUN) {
       json = SkipSpace(json);
 
@@ -96,7 +100,7 @@ struct Serializer<T, DRY_RUN> {
          return std::nullopt;
       } else {
          throw ParsingError(
-            std::format("Invalid constant value (expected: \"{}\")", T::value_.data()), json
+           std::format("Invalid constant value (expected: \"{}\")", T::value_.data()), json
          );
       }
    }

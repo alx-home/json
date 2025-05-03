@@ -41,17 +41,20 @@ concept is_indexable = requires(T a) {
    { std::get<0>(a) };
 };
 
-template <bool RESULT, class... T> struct SparseOptionalHelper;
-template <class... T> struct SparseOptionalHelper<false, T...> : std::false_type {};
-template <> struct SparseOptionalHelper<true> : std::true_type {};
+template <bool RESULT, class... T>
+struct SparseOptionalHelper;
+template <class... T>
+struct SparseOptionalHelper<false, T...> : std::false_type {};
+template <>
+struct SparseOptionalHelper<true> : std::true_type {};
 
 template <class T, class... OTHER>
 struct SparseOptionalHelper<true, T, OTHER...>
    : std::bool_constant<
-        IS_OPTIONAL<T> ? (IS_OPTIONAL<OTHER>&&...) : SparseOptionalHelper<true, OTHER...>::value> {
-};
+       IS_OPTIONAL<T> ? (IS_OPTIONAL<OTHER>&&...) : SparseOptionalHelper<true, OTHER...>::value> {};
 
-template <class T> struct SparseOptional;
+template <class T>
+struct SparseOptional;
 template <class... T>
 struct SparseOptional<std::tuple<T...>>
    : std::bool_constant<SparseOptionalHelper<true, T...>::value> {};
@@ -111,8 +114,9 @@ struct Serializer<T, DRY_RUN> {
    }
 
    using Return = std::pair<T, std::string_view>;
+   template <class...>
    static constexpr std::conditional_t<DRY_RUN, std::optional<Return>, Return> Unserialize(
-      std::string_view json
+     std::string_view json
    ) noexcept(DRY_RUN) {
       if constexpr (DRY_RUN) {
          if (auto result = Find<OPENING>(json); result) {
@@ -215,11 +219,11 @@ struct Serializer<T, DRY_RUN> {
                       if constexpr (INDEX) {
                          return ","
                                 + Serializer<typename ElemType::value_type>::Serialize(
-                                   *std::get<INDEX>(elem)
+                                  *std::get<INDEX>(elem)
                                 );
                       } else {
                          return Serializer<typename ElemType::value_type>::Serialize(
-                            *std::get<INDEX>(elem)
+                           *std::get<INDEX>(elem)
                          );
                       }
                    } else {

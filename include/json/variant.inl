@@ -34,16 +34,20 @@ SOFTWARE.
 
 namespace js {
 
-template <class T> struct IsVariant : std::false_type {};
-template <class T> struct IsVariant<std::optional<T>> : std::true_type {};
-template <class T> static constexpr bool IS_VARIANT = IsVariant<T>::value;
+template <class T>
+struct IsVariant : std::false_type {};
+template <class T1, class T2>
+struct IsVariant<std::variant<T1, T2>> : std::true_type {};
+template <class T>
+static constexpr bool IS_VARIANT = IsVariant<T>::value;
 
 template <class T, bool DRY_RUN>
    requires(IS_VARIANT<T>)
 struct Serializer<T, DRY_RUN> {
    using Return = std::pair<T, std::string_view>;
+   template <class...>
    static constexpr std::conditional_t<DRY_RUN, std::optional<Return>, Return> Unserialize(
-      std::string_view json
+     std::string_view json
    ) noexcept(DRY_RUN) {
       T    result{};
       bool found = false;
@@ -69,7 +73,7 @@ struct Serializer<T, DRY_RUN> {
          }
       }
 
-      return result;
+      return {result, json};
    }
 
    static constexpr std::string Serialize(T const& elem) noexcept {

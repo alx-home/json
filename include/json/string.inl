@@ -39,9 +39,8 @@ SOFTWARE.
 namespace js {
 
 template <class T, bool DRY_RUN>
-   requires(std::is_constructible_v<std::remove_cvref_t<T>, std::string_view> && std::is_constructible_v<std::string, std::remove_cvref_t<T>>)
+   requires(std::is_constructible_v<std::remove_cvref_t<T>, std::string> && std::is_constructible_v<std::string_view, std::remove_cvref_t<T>>)
 struct Serializer<T, DRY_RUN> {
-
    static constexpr std::conditional_t<DRY_RUN, std::optional<std::string_view>, std::string_view>
    FindOpening(std::string_view json, char& quote) noexcept(DRY_RUN) {
       auto it = json.begin();
@@ -230,9 +229,15 @@ struct Serializer<T, DRY_RUN> {
    }
 
    using Return = std::pair<T, std::string_view>;
+   template <class...>
    static constexpr std::conditional_t<DRY_RUN, std::optional<Return>, Return> Unserialize(
-      std::string_view json
+     std::string_view json
    ) noexcept(DRY_RUN) {
+      static_assert(
+        !std::is_base_of_v<std::string_view, std::remove_cvref_t<T>>,
+        "Can't be a string_view since the resulting string might be transformed"
+      );
+
       char quote = '"';
 
       if constexpr (DRY_RUN) {
@@ -245,6 +250,7 @@ struct Serializer<T, DRY_RUN> {
          json = FindOpening(json, quote);
       }
 
+      // Can't be a string_view since the resulting string might be transformed during ParseString
       std::string result;
 
       if constexpr (DRY_RUN) {

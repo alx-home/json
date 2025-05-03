@@ -36,8 +36,10 @@ SOFTWARE.
 
 namespace js {
 
-template <typename> struct IsMemptr : std::false_type {};
-template <typename T> struct IsMemptr<std::pair<std::string, T>> : std::true_type {};
+template <typename>
+struct IsMemptr : std::false_type {};
+template <typename T>
+struct IsMemptr<std::pair<std::string, T>> : std::true_type {};
 
 template <class T, class M>
 concept is_member_pointer = requires(T t, M m) {
@@ -45,9 +47,11 @@ concept is_member_pointer = requires(T t, M m) {
    t.*(m.second);
 };
 
-template <bool> struct is_true;
+template <bool>
+struct is_true;
 
-template <> struct is_true<true> : std::true_type {};
+template <>
+struct is_true<true> : std::true_type {};
 
 template <class T>
 concept is_reflectable = requires {
@@ -114,8 +118,9 @@ struct Serializer<T, DRY_RUN> {
    }
 
    using Return = std::pair<T, std::string_view>;
+   template <class...>
    static constexpr std::conditional_t<DRY_RUN, std::optional<Return>, Return> Unserialize(
-      std::string_view json
+     std::string_view json
    ) noexcept(false) {
       if constexpr (DRY_RUN) {
          if (auto result = Find<OPENING>(json); result) {
@@ -131,17 +136,17 @@ struct Serializer<T, DRY_RUN> {
       std::unordered_set<std::string> keys{};
       std::unordered_set<std::string> required_keys{};
       std::apply(
-         [&](auto const&... members) {
-            (
-               [&](auto const& member) {
-                  if constexpr (!IS_OPTIONAL<decltype(std::declval<T>().*member.second)>) {
-                     required_keys.emplace(member.first);
-                  }
-               }(members),
-               ...
-            );
-         },
-         T::PROTOTYPE
+        [&](auto const&... members) {
+           (
+             [&](auto const& member) {
+                if constexpr (!IS_OPTIONAL<decltype(std::declval<T>().*member.second)>) {
+                   required_keys.emplace(member.first);
+                }
+             }(members),
+             ...
+           );
+        },
+        T::PROTOTYPE
       );
 
       while (true) {
@@ -195,43 +200,47 @@ struct Serializer<T, DRY_RUN> {
          bool found = false;
          bool error = false;
          std::apply(
-            [&](auto const&... members) constexpr {
-               (
-                  [&](auto const& member) constexpr {
-                     if constexpr (DRY_RUN && error) {
-                        return;
-                     }
+           [&](auto const&... members) constexpr {
+              (
+                [&](auto const& member) constexpr {
+                   if constexpr (DRY_RUN) {
+                      if (error) {
+                         return;
+                      }
+                   }
 
-                     if (member.first == key) {
-                        if (found) {
-                           throw std::runtime_error("We shall not be there...");
-                        }
+                   if (member.first == key) {
+                      if (found) {
+                         throw std::runtime_error("We shall not be there...");
+                      }
 
-                        found = true;
+                      found = true;
 
-                        using ElemType = std::remove_cvref_t<decltype(result.*member.second)>;
+                      using ElemType = std::remove_cvref_t<decltype(result.*member.second)>;
 
-                        if constexpr (DRY_RUN) {
-                           if (auto opt_result = Serializer<ElemType, DRY_RUN>::Unserialize(json);
-                               opt_result) {
-                              std::tie(result.*member.second, json) = *opt_result;
-                           } else {
-                              error = true;
-                           }
-                        } else {
-                           std::tie(result.*member.second, json) =
-                              Serializer<ElemType, DRY_RUN>::Unserialize(json);
-                        }
-                     }
-                  }(members),
-                  ...
-               );
-            },
-            T::PROTOTYPE
+                      if constexpr (DRY_RUN) {
+                         if (auto opt_result = Serializer<ElemType, DRY_RUN>::Unserialize(json);
+                             opt_result) {
+                            std::tie(result.*member.second, json) = *opt_result;
+                         } else {
+                            error = true;
+                         }
+                      } else {
+                         std::tie(result.*member.second, json) =
+                           Serializer<ElemType, DRY_RUN>::Unserialize(json);
+                      }
+                   }
+                }(members),
+                ...
+              );
+           },
+           T::PROTOTYPE
          );
 
-         if constexpr (DRY_RUN && error) {
-            return std::nullopt;
+         if constexpr (DRY_RUN) {
+            if (error) {
+               return std::nullopt;
+            }
          }
 
          if (!found) {
@@ -260,35 +269,35 @@ struct Serializer<T, DRY_RUN> {
       std::string result = "{";
 
       std::apply(
-         [&](auto const&... members) {
-            (
-               [&](auto const& member) {
-                  using ElemType = std::remove_cvref_t<decltype(elem.*member.second)>;
+        [&](auto const&... members) {
+           (
+             [&](auto const& member) {
+                using ElemType = std::remove_cvref_t<decltype(elem.*member.second)>;
 
-                  if constexpr (IS_OPTIONAL<ElemType>) {
-                     if (elem.*member.second) {
-                        if (result.size() > 1) {
-                           result += ",";
-                        }
+                if constexpr (IS_OPTIONAL<ElemType>) {
+                   if (elem.*member.second) {
+                      if (result.size() > 1) {
+                         result += ",";
+                      }
 
-                        result += "\"" + member.first + "\":"
-                                  + Serializer<typename ElemType::value_type>::Serialize(
-                                     *elem.*member.second
-                                  );
-                     }
-                  } else {
-                     if (result.size() > 1) {
-                        result += ",";
-                     }
+                      result += "\"" + member.first + "\":"
+                                + Serializer<typename ElemType::value_type>::Serialize(
+                                  *elem.*member.second
+                                );
+                   }
+                } else {
+                   if (result.size() > 1) {
+                      result += ",";
+                   }
 
-                     result += "\"" + member.first
-                               + "\":" + Serializer<ElemType>::Serialize(elem.*member.second);
-                  }
-               }(members),
-               ...
-            );
-         },
-         T::PROTOTYPE
+                   result += "\"" + member.first
+                             + "\":" + Serializer<ElemType>::Serialize(elem.*member.second);
+                }
+             }(members),
+             ...
+           );
+        },
+        T::PROTOTYPE
       );
 
       return result + "}";

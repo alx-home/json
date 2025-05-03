@@ -85,8 +85,9 @@ struct Serializer<T, DRY_RUN> {
    }
 
    using Return = std::pair<T, std::string_view>;
+   template <class...>
    static constexpr std::conditional_t<DRY_RUN, std::optional<Return>, Return> Unserialize(
-      std::string_view json
+     std::string_view json
    ) noexcept(DRY_RUN) {
       if constexpr (DRY_RUN) {
          if (auto result = Find<OPENING>(json); result) {
