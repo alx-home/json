@@ -36,10 +36,7 @@ SOFTWARE.
 namespace js {
 
 template <class T>
-concept is_indexable = requires(T a) {
-   { std::tuple_size_v<T> > 0 };
-   { std::get<0>(a) };
-};
+concept is_indexable = requires() { std::tuple_size_v<T>; };
 
 template <bool RESULT, class... T>
 struct SparseOptionalHelper;
@@ -61,7 +58,7 @@ struct SparseOptional<std::tuple<T...>>
 
 template <class T>
 concept not_sparse_optional = requires(T a) {
-   { std::tuple_size_v<T> > 0 };
+   { std::tuple_size_v<T> };
    { SparseOptional<T>::value };
 };
 
@@ -208,32 +205,35 @@ struct Serializer<T, DRY_RUN> {
    static constexpr std::string Serialize(T const& elem) noexcept(false) {
       return "[" +
              [&]<std::size_t... INDEX>(std::index_sequence<INDEX...>) constexpr {
-                return ([&]() constexpr {
-                   using ElemType = std::tuple_element_t<INDEX, T>;
+                return (
+                  [&]() constexpr {
+                     using ElemType = std::tuple_element_t<INDEX, T>;
 
-                   if constexpr (IS_OPTIONAL<ElemType>) {
-                      if (!std::get<INDEX>(elem)) {
-                         return "";
-                      }
+                     if constexpr (IS_OPTIONAL<ElemType>) {
+                        if (!std::get<INDEX>(elem)) {
+                           return "";
+                        }
 
-                      if constexpr (INDEX) {
-                         return ","
-                                + Serializer<typename ElemType::value_type>::Serialize(
-                                  *std::get<INDEX>(elem)
-                                );
-                      } else {
-                         return Serializer<typename ElemType::value_type>::Serialize(
-                           *std::get<INDEX>(elem)
-                         );
-                      }
-                   } else {
-                      if constexpr (INDEX) {
-                         return "," + Serializer<ElemType>::Serialize(std::get<INDEX>(elem));
-                      } else {
-                         return Serializer<ElemType>::Serialize(std::get<INDEX>(elem));
-                      }
-                   }
-                }() + ...);
+                        if constexpr (INDEX) {
+                           return ","
+                                  + Serializer<typename ElemType::value_type>::Serialize(
+                                    *std::get<INDEX>(elem)
+                                  );
+                        } else {
+                           return Serializer<typename ElemType::value_type>::Serialize(
+                             *std::get<INDEX>(elem)
+                           );
+                        }
+                     } else {
+                        if constexpr (INDEX) {
+                           return "," + Serializer<ElemType>::Serialize(std::get<INDEX>(elem));
+                        } else {
+                           return Serializer<ElemType>::Serialize(std::get<INDEX>(elem));
+                        }
+                     }
+                  }()
+                  + ... + ""_str
+                );
              }(std::make_index_sequence<std::tuple_size_v<T>>())
              + "]";
    }
