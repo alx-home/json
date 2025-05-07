@@ -153,7 +153,7 @@ Pparse(std::string_view json) noexcept(false) {
 
 template <std::size_t INDENT_SIZE = 3, bool INDENT_SPACE = true>
 static constexpr std::string
-Stringify(auto const& elem, bool indent = true) noexcept(false) {
+Stringify(auto const& elem, bool indent = false) noexcept(false) {
    return Serializer<std::remove_cvref_t<decltype(elem)>>::
      template Stringify<INDENT_SIZE, INDENT_SPACE>(
        elem, indent ? std::optional<std::size_t>(0) : std::nullopt
