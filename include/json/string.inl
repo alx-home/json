@@ -23,7 +23,10 @@ SOFTWARE.
 */
 
 #pragma once
+#include <algorithm>
 #include <format>
+#include <iomanip>
+#include <ios>
 #include <optional>
 #undef min
 
@@ -230,7 +233,7 @@ struct Serializer<T, DRY_RUN> {
 
    using Return = std::pair<T, std::string_view>;
    template <class...>
-   static constexpr std::conditional_t<DRY_RUN, std::optional<Return>, Return> Unserialize(
+   static constexpr std::conditional_t<DRY_RUN, std::optional<Return>, Return> Parse(
      std::string_view json
    ) noexcept(DRY_RUN) {
       static_assert(
@@ -267,77 +270,74 @@ struct Serializer<T, DRY_RUN> {
    }
 
    static constexpr std::string EscapeString(std::string_view string) noexcept(false) {
-      std::string result;
+      std::stringstream result;
+
+      result << std::setfill('0') << std::uppercase << std::hex;
 
       for (auto it = string.begin(); it != string.end(); ++it) {
          if (*it == '\\') {
-            result += "\\\\";
+            result << "\\\\";
          } else if (*it == '\b') {
-            result += "\\b";
+            result << "\\b";
          } else if (*it == '\f') {
-            result += "\\f";
+            result << "\\f";
          } else if (*it == '\r') {
-            result += "\\r";
+            result << "\\r";
          } else if (*it == '\n') {
-            result += "\\n";
+            result << "\\n";
          } else if (*it == '\t') {
-            result += "\\t";
+            result << "\\t";
          } else if (*it == '"') {
-            result += "\\\"";
-         } else if (*it >= 0 && *it <= 0x1f) {
-            auto h = *it & 0xF;
-            result += std::string{"\\u00"} + (*it & 0x10 ? "1" : "0")
-                      + static_cast<char>(h > 9 ? ('a' + (h - 9)) : ('0' + h));
-         } else if ((*it & 0x80) == 0x0) {
+            result << "\\\"";
+         } else {
+            // if (*it >= 0 && *it <= 0x1f) {
+            // result << "\\u" << std::setw(4) << static_cast<int>(*it); @todo
+            // } else if ((*it & 0x80) == 0x0) {
             // ascii
-            result += *it;
-         } else if ((*it & 0xE0) == 0xC0) {
+            result << *it;
+            // } else if ((*it & 0xE0) == 0xC0) {
             // unicode 2-byte
 
-            if (std::distance(it, string.end()) < 2) {
-               throw ParsingError("Invalid utf8 sequence", {it, string.end()});
-            }
+            // if (std::distance(it, string.end()) < 2) {
+            //    throw ParsingError("Invalid utf8 sequence", {it, string.end()});
+            // }
 
-            uint16_t code_point = ((it[0] & 0x1F) << 6) | (it[1] & 0x3F);
-            result += std::string{"\\u00"} + static_cast<char>((code_point >> 8) & 0xFF)
-                      + static_cast<char>(code_point & 0xFF);
-            it += 2;
-         } else if ((*it & 0xF0) == 0xE0) {
-            // unicode 3-byte
+            // uint16_t code_point = ((it[0] & 0x1F) << 6) | (it[1] & 0x3F);
+            // result << "\\u" << std::setw(4) << code_point;
+            // std::advance(it, 1);
+            //    result << *it;
+            // } else if ((*it & 0xF0) == 0xE0) {
+            //    // unicode 3-byte
 
-            if (std::distance(it, string.end()) < 3) {
-               throw ParsingError("Invalid utf8 sequence", {it, string.end()});
-            }
+            //    if (std::distance(it, string.end()) < 3) {
+            //       throw ParsingError("Invalid utf8 sequence", {it, string.end()});
+            //    }
 
-            uint16_t code_point = ((it[0] & 0x0F) << 12) | ((it[1] & 0x3F) << 6) | (it[2] & 0x3F);
-            result += std::string{"\\u0"} + static_cast<char>((code_point >> 16) & 0xFF)
-                      + static_cast<char>((code_point >> 8) & 0xFF)
-                      + static_cast<char>(code_point & 0xFF);
-            it += 3;
-         } else if ((*it & 0xF0) == 0xE0) {
-            // unicode 4-byte
+            //    uint16_t code_point = ((it[0] & 0x0F) << 12) | ((it[1] & 0x3F) << 6) | (it[2] &
+            //    0x3F); result << "\\u" << std::setw(4) << code_point; std::advance(it, 2);
+            // } else if ((*it & 0xF8) == 0xF0) {
+            //    // unicode 4-byte
 
-            if (std::distance(it, string.end()) < 4) {
-               throw ParsingError("Invalid utf8 sequence", {it, string.end()});
-            }
+            //    if (std::distance(it, string.end()) < 4) {
+            //       throw ParsingError("Invalid utf8 sequence", {it, string.end()});
+            //    }
 
-            uint16_t code_point = ((it[0] & 0x07) << 18) | ((it[1] & 0x3F) << 12)
-                                  | ((it[2] & 0x3F) << 6) | (it[3] & 0x3F);
-            result += std::string{"\\u"} + static_cast<char>((code_point >> 24) & 0xFF)
-                      + static_cast<char>((code_point >> 16) & 0xFF)
-                      + static_cast<char>((code_point >> 8) & 0xFF)
-                      + static_cast<char>(code_point & 0xFF);
-            it += 4;
-         } else {
-            assert(false);
-            throw ParsingError("Invalid utf8 sequence", {it, string.end()});
+            //    uint16_t code_point = ((it[0] & 0x07) << 18) | ((it[1] & 0x3F) << 12)
+            //                          | ((it[2] & 0x3F) << 6) | (it[3] & 0x3F);
+            //    result << "\\u" << std::setw(4) << code_point;
+            //    std::advance(it, 3);
+            // } else {
+            //    assert(false);
+            //    throw ParsingError("Invalid utf8 sequence", {it, string.end()});
          }
       }
 
-      return result;
+      return result.str();
    }
 
-   static constexpr std::string Serialize(T const& elem) noexcept(false) {
+   template <std::size_t INDENT_SIZE, bool INDENT_SPACE>
+   static constexpr std::string Stringify(T const& elem, std::optional<std::size_t>) noexcept(false
+   ) {
       return "\"" + Serializer<T>::EscapeString(elem) + "\"";
    }
 };

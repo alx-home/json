@@ -24,13 +24,16 @@ SOFTWARE.
 #pragma once
 
 #include <utils/String.h>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <type_traits>
 #include <variant>
 
 namespace js {
-template <utils::String...> struct Enum;
+template <utils::String... VALUES>
+   requires(sizeof...(VALUES) > 0)
+struct Enum;
 }
 
 template <class TYPE, utils::String... VALUES>
@@ -45,11 +48,14 @@ constexpr auto operator<=>(TYPE const& lhs, js::Enum<VALUES...> const& rhs) noex
 
 namespace js {
 
-template <class U, class V> using _ = std::pair<U, V>;
+template <class U, class V>
+using _ = std::pair<U, V>;
 
-template <class T> struct IsProtoDef : std::false_type {};
+template <class T>
+struct IsProtoDef : std::false_type {};
 
-template <class U, class V> struct IsProtoDef<_<U, V>> : std::true_type {};
+template <class U, class V>
+struct IsProtoDef<_<U, V>> : std::true_type {};
 
 template <class... T>
    requires(IsProtoDef<T>::value && ...)
@@ -58,21 +64,25 @@ using Proto = std::tuple<T...>;
 class Serializable {
    virtual ~Serializable() = default;
 
-   virtual std::string   Serialize()   = 0;
-   virtual Serializable* Unserialize() = 0;
+   virtual std::string   Stringify() = 0;
+   virtual Serializable* Parse()     = 0;
 };
 
-template <class T, bool DRY_RUN = false> struct Serializer;
+template <class T, bool DRY_RUN = false>
+struct Serializer;
 
 using null = nullptr_t;
 
-template <utils::String STRING> struct Cst {
+template <utils::String STRING>
+struct Cst {
    static constexpr auto VALUE = STRING;
 
    std::string_view operator*() const { return VALUE.value_.data(); }
 };
 
-template <utils::String... VALUES> struct Enum : std::variant<js::Cst<VALUES>...> {
+template <utils::String... VALUES>
+   requires(sizeof...(VALUES) > 0)
+struct Enum : std::variant<js::Cst<VALUES>...> {
    Enum(char const* value)
       : Enum(std::string_view{value}) {}
 
@@ -82,16 +92,16 @@ template <utils::String... VALUES> struct Enum : std::variant<js::Cst<VALUES>...
 
          bool found = false;
          (
-            [&result, &value, &found]<utils::String VALUE>() constexpr {
-               if (found) {
-                  return;
-               }
-               if (value == std::string_view{VALUE.value_.data()}) {
-                  result = js::Cst<VALUE>{};
-                  found  = true;
-               }
-            }.template operator()<VALUES>(),
-            ...
+           [&result, &value, &found]<utils::String VALUE>() constexpr {
+              if (found) {
+                 return;
+              }
+              if (value == std::string_view{VALUE.value_.data()}) {
+                 result = js::Cst<VALUE>{};
+                 found  = true;
+              }
+           }.template operator()<VALUES>(),
+           ...
          );
 
          if (!found) {
@@ -103,12 +113,12 @@ template <utils::String... VALUES> struct Enum : std::variant<js::Cst<VALUES>...
    explicit(false) operator std::string_view() const {
       std::string_view result{};
       (
-         [this, &result]<utils::String VALUE>() constexpr {
-            if (std::holds_alternative<js::Cst<VALUE>>(*this)) {
-               result = *std::get<js::Cst<VALUE>>(*this);
-            }
-         }.template operator()<VALUES>(),
-         ...
+        [this, &result]<utils::String VALUE>() constexpr {
+           if (std::holds_alternative<js::Cst<VALUE>>(*this)) {
+              result = *std::get<js::Cst<VALUE>>(*this);
+           }
+        }.template operator()<VALUES>(),
+        ...
       );
       return result;
    }
@@ -132,19 +142,22 @@ namespace js {
 template <class TYPE>
 static constexpr TYPE
 Parse(std::string_view json) noexcept(false) {
-   return Serializer<TYPE>::Unserialize(json).first;
+   return Serializer<TYPE>::Parse(json).first;
 }
 
 template <class TYPE>
 static constexpr std::tuple<TYPE, std::string_view>
 Pparse(std::string_view json) noexcept(false) {
-   return Serializer<TYPE>::Unserialize(json);
+   return Serializer<TYPE>::Parse(json);
 }
 
-template <class TYPE>
+template <std::size_t INDENT_SIZE = 3, bool INDENT_SPACE = true>
 static constexpr std::string
-Serialize(TYPE const& elem) noexcept(false) {
-   return Serializer<TYPE>::Serialize(elem);
+Stringify(auto const& elem, bool indent = true) noexcept(false) {
+   return Serializer<std::remove_cvref_t<decltype(elem)>>::
+     template Stringify<INDENT_SIZE, INDENT_SPACE>(
+       elem, indent ? std::optional<std::size_t>(0) : std::nullopt
+     );
 }
 
 }  // namespace js

@@ -112,7 +112,7 @@ struct Serializer<T, DRY_RUN> {
 
    using Return = std::pair<T, std::string_view>;
    template <class...>
-   static constexpr std::conditional_t<DRY_RUN, std::optional<Return>, Return> Unserialize(
+   static constexpr std::conditional_t<DRY_RUN, std::optional<Return>, Return> Parse(
      std::string_view json
    ) noexcept(DRY_RUN) {
       if constexpr (DRY_RUN) {
@@ -159,7 +159,7 @@ struct Serializer<T, DRY_RUN> {
             using SerializeType = OPTIONAL_VALUE_HELPER<ElemType>;
 
             if constexpr (IS_OPTIONAL<ElemType>) {
-               if (auto result = Serializer<SerializeType, true>::Unserialize(json); result) {
+               if (auto result = Serializer<SerializeType, true>::Parse(json); result) {
                   auto [value, next] = *result;
                   json               = next;
                   return Return{std::move(value)};
@@ -168,8 +168,7 @@ struct Serializer<T, DRY_RUN> {
                   return Return{std::nullopt};
                }
             } else if constexpr (DRY_RUN) {
-               if (auto opt_result = Serializer<SerializeType, DRY_RUN>::Unserialize(json);
-                   opt_result) {
+               if (auto opt_result = Serializer<SerializeType, DRY_RUN>::Parse(json); opt_result) {
                   auto [value, next] = *opt_result;
                   json               = next;
                   return Return{std::move(value)};
@@ -178,7 +177,7 @@ struct Serializer<T, DRY_RUN> {
                   return Return{std::nullopt};
                }
             } else {
-               auto [value, next] = Serializer<SerializeType, DRY_RUN>::Unserialize(json);
+               auto [value, next] = Serializer<SerializeType, DRY_RUN>::Parse(json);
                json               = next;
                return Return{std::move(value)};
             }
@@ -202,40 +201,54 @@ struct Serializer<T, DRY_RUN> {
       return {result, json};
    }
 
-   static constexpr std::string Serialize(T const& elem) noexcept(false) {
-      return "[" +
-             [&]<std::size_t... INDEX>(std::index_sequence<INDEX...>) constexpr {
-                return (
-                  [&]() constexpr {
-                     using ElemType = std::tuple_element_t<INDEX, T>;
+   template <std::size_t INDENT_SIZE, bool INDENT_SPACE>
+   static constexpr std::string
+   Stringify(T const& elem, std::optional<std::size_t> indent) noexcept(false) {
+      auto const [indent_str, next_indent, next_indent_size] =
+        NextIndent<INDENT_SIZE, INDENT_SPACE, true>(indent);
 
-                     if constexpr (IS_OPTIONAL<ElemType>) {
-                        if (!std::get<INDEX>(elem)) {
-                           return "";
-                        }
+      std::string const result =
+        [&]<std::size_t... INDEX>(std::index_sequence<INDEX...>) constexpr {
+           return (
+             [&]() constexpr {
+                using ElemType = std::tuple_element_t<INDEX, T>;
 
-                        if constexpr (INDEX) {
-                           return ","
-                                  + Serializer<typename ElemType::value_type>::Serialize(
-                                    *std::get<INDEX>(elem)
-                                  );
-                        } else {
-                           return Serializer<typename ElemType::value_type>::Serialize(
-                             *std::get<INDEX>(elem)
-                           );
-                        }
-                     } else {
-                        if constexpr (INDEX) {
-                           return "," + Serializer<ElemType>::Serialize(std::get<INDEX>(elem));
-                        } else {
-                           return Serializer<ElemType>::Serialize(std::get<INDEX>(elem));
-                        }
-                     }
-                  }()
-                  + ... + ""_str
-                );
-             }(std::make_index_sequence<std::tuple_size_v<T>>())
-             + "]";
+                if constexpr (IS_OPTIONAL<ElemType>) {
+                   if (!std::get<INDEX>(elem)) {
+                      return "";
+                   }
+
+                   std::string const result{
+                     next_indent
+                     + Serializer<typename ElemType::value_type>::
+                       template Stringify<INDENT_SIZE, INDENT_SPACE>(
+                         *std::get<INDEX>(elem), next_indent_size
+                       )
+                   };
+                   if constexpr (INDEX) {
+                      return "," + result;
+                   } else {
+                      return result;
+                   }
+                } else {
+                   std::string const result{
+                     next_indent
+                     + Serializer<ElemType>::template Stringify<INDENT_SIZE, INDENT_SPACE>(
+                       std::get<INDEX>(elem), next_indent_size
+                     )
+                   };
+                   if constexpr (INDEX) {
+                      return "," + result;
+                   } else {
+                      return result;
+                   }
+                }
+             }()
+             + ... + ""_str
+           );
+        }(std::make_index_sequence<std::tuple_size_v<T>>());
+
+      return "[" + result + (result.size() > 1 ? indent_str + "]" : "]");
    }
 };
 }  // namespace js

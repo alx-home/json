@@ -30,21 +30,42 @@ SOFTWARE.
 #include <optional>
 #include <tuple>
 #include <type_traits>
+#include <utility>
 
 namespace js {
 
-template <class T> struct IsTupleT : std::false_type {};
+template <class T>
+struct IsTupleT : std::false_type {};
 
-template <class... T> struct IsTupleT<std::tuple<T...>> : std::true_type {};
+template <class... T>
+struct IsTupleT<std::tuple<T...>> : std::true_type {};
 
 template <class T>
 concept is_tuple = requires { IsTupleT<T>::value; };
 
-template <class T> struct IsOptional : std::false_type {};
-template <class T> struct IsOptional<std::optional<T>> : std::true_type {};
-template <class T> static constexpr bool IS_OPTIONAL = IsOptional<T>::value;
+template <class T>
+struct IsOptional : std::false_type {};
+template <class T>
+struct IsOptional<std::optional<T>> : std::true_type {};
+template <class T>
+static constexpr bool IS_OPTIONAL = IsOptional<std::remove_cvref_t<T>>::value;
 
-template <class T> struct OptionalValueHelper {
+template <class T>
+struct OptionalValueT {
+   using type = T;
+};
+
+template <class T>
+   requires(IS_OPTIONAL<T>)
+struct OptionalValueT<T> {
+   using type = typename T::value_type;
+};
+
+template <class T>
+using OptionalValue = typename OptionalValueT<T>::type;
+
+template <class T>
+struct OptionalValueHelper {
    using type = T;
 };
 
@@ -54,7 +75,23 @@ struct OptionalValueHelper<T> {
    using type = typename T::value_type;
 };
 
-template <class T> using OPTIONAL_VALUE_HELPER = typename OptionalValueHelper<T>::type;
+template <class T>
+using OPTIONAL_VALUE_HELPER = typename OptionalValueHelper<T>::type;
+
+template <std::size_t INDENT_SIZE, bool INDENT_SPACE, bool CONTAINER = false>
+static constexpr auto
+NextIndent(std::optional<std::size_t> indent) {
+   auto const indent_str =
+     std::string(std::size_t{indent ? *indent : 0}, INDENT_SPACE ? ' ' : '\t');
+   auto const next_indent_size = indent ? *indent + INDENT_SIZE : 0;
+   auto const next_indent      = std::string(next_indent_size, INDENT_SPACE ? ' ' : '\t');
+
+   return std::make_tuple(
+     (CONTAINER && indent) ? "\n" + indent_str : indent_str,
+     (CONTAINER && indent) ? "\n" + next_indent : next_indent,
+     next_indent_size
+   );
+}
 
 }  // namespace js
 

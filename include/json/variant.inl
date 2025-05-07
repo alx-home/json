@@ -27,6 +27,7 @@ SOFTWARE.
 
 #include "exceptions.h"
 
+#include <optional>
 #include <string_view>
 #include <tuple>
 #include <type_traits>
@@ -46,7 +47,7 @@ template <class T, bool DRY_RUN>
 struct Serializer<T, DRY_RUN> {
    using Return = std::pair<T, std::string_view>;
    template <class...>
-   static constexpr std::conditional_t<DRY_RUN, std::optional<Return>, Return> Unserialize(
+   static constexpr std::conditional_t<DRY_RUN, std::optional<Return>, Return> Parse(
      std::string_view json
    ) noexcept(DRY_RUN) {
       T    result{};
@@ -57,7 +58,7 @@ struct Serializer<T, DRY_RUN> {
                 return;
              }
 
-             if (auto opt_result = Serializer<TYPE, true>::Unserialize(json); opt_result) {
+             if (auto opt_result = Serializer<TYPE, true>::Parse(json); opt_result) {
                 found                  = true;
                 std::tie(result, json) = *opt_result;
              }
@@ -76,20 +77,23 @@ struct Serializer<T, DRY_RUN> {
       return {result, json};
    }
 
-   static constexpr std::string Serialize(T const& elem) noexcept {
+   template <std::size_t INDENT_SIZE, bool INDENT_SPACE>
+   static constexpr std::string
+   Stringify(T const& elem, std::optional<std::size_t> indent) noexcept {
       bool found = false;
-      [&found]<class... TYPES>(std::variant<TYPES...>& elem) constexpr {
-         (([&found, &elem]<class TYPE>() constexpr {
-             if (found) {
-                return "";
-             }
-
-             if (std::holds_alternative<TYPE>(elem)) {
-                found = true;
-                return Serializer<TYPE>::Serialize(std::get<TYPE>(elem));
-             }
-          }.template operator()<TYPES>())
-          + ...);
+      return [&found, &indent]<class... TYPES>(std::variant<TYPES...> const& elem) constexpr {
+         return (
+           ([&found, &elem, &indent]<class TYPE>() constexpr -> std::string {
+              if (!found && std::holds_alternative<TYPE>(elem)) {
+                 found = true;
+                 return Serializer<TYPE>::template Stringify<INDENT_SIZE, INDENT_SPACE>(
+                   std::get<TYPE>(elem), indent
+                 );
+              }
+              return "";
+           }.template operator()<TYPES>())
+           + ...
+         );
       }(elem);
    }
 };

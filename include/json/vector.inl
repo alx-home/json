@@ -27,7 +27,6 @@ SOFTWARE.
 #include "json.h"
 
 #include <optional>
-#include <stdexcept>
 #include <string_view>
 #include <type_traits>
 #include <utility>
@@ -86,7 +85,7 @@ struct Serializer<T, DRY_RUN> {
 
    using Return = std::pair<T, std::string_view>;
    template <class...>
-   static constexpr std::conditional_t<DRY_RUN, std::optional<Return>, Return> Unserialize(
+   static constexpr std::conditional_t<DRY_RUN, std::optional<Return>, Return> Parse(
      std::string_view json
    ) noexcept(DRY_RUN) {
       if constexpr (DRY_RUN) {
@@ -103,7 +102,8 @@ struct Serializer<T, DRY_RUN> {
       std::size_t index = 0;
 
       while (true) {
-         if (auto result = Serializer<T, true>::Find<CLOSING>(json); result) {
+         if (auto result = Serializer<T, true>::template Find<Serializer<T, true>::CLOSING>(json);
+             result) {
             json = *result;
             break;
          }
@@ -121,7 +121,7 @@ struct Serializer<T, DRY_RUN> {
          }
 
          if constexpr (DRY_RUN) {
-            if (auto opt_result = Serializer<typename T::value_type, DRY_RUN>::Unserialize(json);
+            if (auto opt_result = Serializer<typename T::value_type, DRY_RUN>::Parse(json);
                 opt_result) {
                auto& [value, next] = *opt_result;
                json                = next;
@@ -132,8 +132,8 @@ struct Serializer<T, DRY_RUN> {
                return std::nullopt;
             }
          } else {
-            auto& [value, next] = Serializer<typename T::value_type, DRY_RUN>::Unserialize(json);
-            json                = next;
+            auto const& [value, next] = Serializer<typename T::value_type, DRY_RUN>::Parse(json);
+            json                      = next;
 
             result.emplace_back(std::move(value));
             ++index;
@@ -143,17 +143,26 @@ struct Serializer<T, DRY_RUN> {
       return Return{result, json};
    }
 
-   static constexpr std::string Serialize(T const& elem) noexcept(false) {
+   template <std::size_t INDENT_SIZE, bool INDENT_SPACE>
+   static constexpr std::string
+   Stringify(T const& elem, std::optional<std::size_t> indent) noexcept(false) {
+      auto const [indent_str, next_indent, next_indent_size] =
+        NextIndent<INDENT_SIZE, INDENT_SPACE, true>(indent);
+
       std::string result = "[";
       for (auto const& value : elem) {
-         if (result.size() == 1) {
-            result += Serializer<typename T::value_type>::Serialize(value);
-         } else {
-            result += "," + Serializer<typename T::value_type>::Serialize(value);
+         if (result.size() > 1) {
+            result += ",";
          }
+
+         result +=
+           next_indent
+           + Serializer<typename T::value_type>::template Stringify<INDENT_SIZE, INDENT_SPACE>(
+             value, next_indent_size
+           );
       }
 
-      return result + "]";
+      return result + (result.size() > 1 ? indent_str + "]" : "]");
    }
 };
 }  // namespace js

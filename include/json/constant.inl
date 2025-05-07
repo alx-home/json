@@ -58,7 +58,7 @@ struct Serializer<T, DRY_RUN> {
 
    using Return = std::pair<T, std::string_view>;
    template <class...>
-   static constexpr std::conditional_t<DRY_RUN, std::optional<Return>, Return> Unserialize(
+   static constexpr std::conditional_t<DRY_RUN, std::optional<Return>, Return> Parse(
      std::string_view json
    ) noexcept(DRY_RUN) {
       json = SkipSpace(json);
@@ -105,7 +105,8 @@ struct Serializer<T, DRY_RUN> {
       }
    }
 
-   static constexpr std::string Serialize(T const&) noexcept {
+   template <std::size_t INDENT_SIZE, bool INDENT_SPACE>
+   static constexpr std::string Stringify(T const&, std::optional<std::size_t>) noexcept {
       return "\"" + std::string(T::value_.data()) + "\"";
    }
 };

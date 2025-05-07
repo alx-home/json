@@ -119,7 +119,7 @@ struct Serializer<T, DRY_RUN> {
 
    using Return = std::pair<T, std::string_view>;
    template <class...>
-   static constexpr std::conditional_t<DRY_RUN, std::optional<Return>, Return> Unserialize(
+   static constexpr std::conditional_t<DRY_RUN, std::optional<Return>, Return> Parse(
      std::string_view json
    ) noexcept(false) {
       if constexpr (DRY_RUN) {
@@ -170,13 +170,13 @@ struct Serializer<T, DRY_RUN> {
 
          std::string key;
          if constexpr (DRY_RUN) {
-            if (auto result = Serializer<std::string, DRY_RUN>::Unserialize(json); result) {
+            if (auto result = Serializer<std::string, DRY_RUN>::Parse(json); result) {
                std::tie(key, json) = *result;
             } else {
                return std::nullopt;
             }
          } else {
-            std::tie(key, json) = Serializer<std::string, DRY_RUN>::Unserialize(json);
+            std::tie(key, json) = Serializer<std::string, DRY_RUN>::Parse(json);
          }
 
          if (!keys.emplace(key).second) {
@@ -216,10 +216,11 @@ struct Serializer<T, DRY_RUN> {
 
                       found = true;
 
-                      using ElemType = std::remove_cvref_t<decltype(result.*member.second)>;
+                      using ElemType =
+                        OptionalValue<std::remove_cvref_t<decltype(result.*member.second)>>;
 
                       if constexpr (DRY_RUN) {
-                         if (auto opt_result = Serializer<ElemType, DRY_RUN>::Unserialize(json);
+                         if (auto opt_result = Serializer<ElemType, DRY_RUN>::Parse(json);
                              opt_result) {
                             std::tie(result.*member.second, json) = *opt_result;
                          } else {
@@ -227,7 +228,7 @@ struct Serializer<T, DRY_RUN> {
                          }
                       } else {
                          std::tie(result.*member.second, json) =
-                           Serializer<ElemType, DRY_RUN>::Unserialize(json);
+                           Serializer<ElemType, DRY_RUN>::Parse(json);
                       }
                    }
                 }(members),
@@ -265,7 +266,12 @@ struct Serializer<T, DRY_RUN> {
       return Return{result, std::string_view{json.begin(), json.end()}};
    }
 
-   static constexpr std::string Serialize(T const& elem) noexcept(false) {
+   template <std::size_t INDENT_SIZE, bool INDENT_SPACE>
+   static constexpr std::string
+   Stringify(T const& elem, std::optional<std::size_t> indent) noexcept(false) {
+      auto const [indent_str, next_indent, next_indent_size] =
+        NextIndent<INDENT_SIZE, INDENT_SPACE, true>(indent);
+
       std::string result = "{";
 
       std::apply(
@@ -280,18 +286,23 @@ struct Serializer<T, DRY_RUN> {
                          result += ",";
                       }
 
-                      result += "\"" + member.first + "\":"
-                                + Serializer<typename ElemType::value_type>::Serialize(
-                                  *elem.*member.second
-                                );
+                      result += next_indent + "\"" + std::string{member.first}
+                                + "\":" + (indent ? " " : "")
+                                + Serializer<typename ElemType::value_type>::
+                                  template Stringify<INDENT_SIZE, INDENT_SPACE>(
+                                    *(elem.*member.second), next_indent_size
+                                  );
                    }
                 } else {
                    if (result.size() > 1) {
                       result += ",";
                    }
 
-                   result += "\"" + member.first
-                             + "\":" + Serializer<ElemType>::Serialize(elem.*member.second);
+                   result += next_indent + "\"" + std::string{member.first}
+                             + "\":" + (indent ? " " : "")
+                             + Serializer<ElemType>::template Stringify<INDENT_SIZE, INDENT_SPACE>(
+                               elem.*member.second, next_indent_size
+                             );
                 }
              }(members),
              ...
@@ -300,7 +311,7 @@ struct Serializer<T, DRY_RUN> {
         T::PROTOTYPE
       );
 
-      return result + "}";
+      return result + (result.size() > 1 ? indent_str + "}" : "}");
    }
 };
 

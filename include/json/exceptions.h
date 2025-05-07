@@ -30,7 +30,7 @@ SOFTWARE.
 namespace js {
 
 struct SerializableException : std::exception {
-   virtual std::string Serialize() const = 0;
+   virtual std::string Stringify() const = 0;
 };
 
 struct ParsingError : std::runtime_error {
