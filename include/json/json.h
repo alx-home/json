@@ -28,6 +28,7 @@ SOFTWARE.
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 #include <variant>
 
 namespace js {
@@ -60,6 +61,26 @@ struct IsProtoDef<_<U, V>> : std::true_type {};
 template <class... T>
    requires(IsProtoDef<T>::value && ...)
 using Proto = std::tuple<T...>;
+
+template <class PARENT_PROTO, class... T>
+   requires(IsProtoDef<T>::value && ...)
+struct Extend
+   : decltype(std::tuple_cat(std::declval<PARENT_PROTO>(), std::declval<Proto<T...>>())) {
+   using tuple =
+     decltype(std::tuple_cat(std::declval<PARENT_PROTO>(), std::declval<Proto<T...>>()));
+
+   constexpr Extend(PARENT_PROTO && parent_proto, T && ... elems)
+      : tuple(std::tuple_cat(
+          std::forward<PARENT_PROTO>(parent_proto),
+          js::Proto{
+            std::forward<T>(elems)...,
+          }
+        )) {}
+};
+
+template <class PARENT_PROTO, class... T>
+   requires(IsProtoDef<T>::value && ...)
+Extend(PARENT_PROTO&&, T&&...) -> Extend<PARENT_PROTO, T...>;
 
 class Serializable {
    virtual ~Serializable() = default;
