@@ -143,6 +143,8 @@ struct Enum : std::variant<js::Cst<VALUES>...> {
       );
       return result;
    }
+
+   std::string_view operator*() const { return *this; }
 };
 
 }  // namespace js

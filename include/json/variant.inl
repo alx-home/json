@@ -37,8 +37,8 @@ namespace js {
 
 template <class T>
 struct IsVariant : std::false_type {};
-template <class T1, class T2>
-struct IsVariant<std::variant<T1, T2>> : std::true_type {};
+template <class... T>
+struct IsVariant<std::variant<T...>> : std::true_type {};
 template <class T>
 static constexpr bool IS_VARIANT = IsVariant<T>::value;
 
