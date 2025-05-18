@@ -29,6 +29,8 @@ SOFTWARE.
 namespace js {
 
 ParsingError::ParsingError(std::string_view message, std::string_view json)
-   : std::runtime_error(std::format("{} at pos {}!", message, (&json.front() - json.data()))) {}
+   : std::runtime_error(
+       std::format("{} at pos {}, message: {}!", message, (&json.front() - json.data()), json)
+     ) {}
 
 }  // namespace js
