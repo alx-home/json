@@ -29,6 +29,8 @@ SOFTWARE.
 #include "exceptions.h"
 
 #include <cassert>
+#include <iomanip>
+#include <ios>
 #include <iterator>
 #include <optional>
 #include <sstream>
@@ -181,8 +183,9 @@ struct Serializer<T, DRY_RUN> {
 
    template <std::size_t INDENT_SIZE, bool INDENT_SPACE>
    static constexpr std::string Stringify(T const& elem, std::optional<std::size_t>) noexcept {
-      std::stringstream ss;
-      ss << elem;
+      std::stringstream     ss;
+      static constexpr auto MAX_PRECISION{std::numeric_limits<long double>::digits10 + 1};
+      ss << std::scientific << std::setprecision(MAX_PRECISION) << elem;
       return ss.str();
    }
 };
