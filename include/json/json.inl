@@ -30,7 +30,6 @@ SOFTWARE.
 #include <optional>
 #include <tuple>
 #include <type_traits>
-#include <utility>
 
 namespace js {
 
@@ -106,3 +105,35 @@ template <class TYPE, utils::String... VALUES2>
 operator<=>(TYPE const& lhs, js::Enum<VALUES2...> const& rhs) noexcept {
    return lhs <=> static_cast<std::string_view>(rhs);
 }
+
+#include "number.inl"
+#include "boolean.inl"
+#include "string.inl"
+#include "array.inl"
+#include "vector.inl"
+#include "struct.inl"
+#include "variant.inl"
+#include "constant.inl"
+
+namespace js {
+template <class TYPE>
+TYPE
+Parse(std::string_view json) noexcept(false) {
+   return Serializer<TYPE>::Parse(json).first;
+}
+
+template <class TYPE>
+std::tuple<TYPE, std::string_view>
+Pparse(std::string_view json) noexcept(false) {
+   return Serializer<TYPE>::Parse(json);
+}
+
+template <class TYPE, std::size_t INDENT_SIZE, bool INDENT_SPACE>
+std::string
+Stringify2(TYPE const& elem, bool indent) noexcept(false) {
+   return Serializer<std::remove_cvref_t<TYPE>>::template Stringify<INDENT_SIZE, INDENT_SPACE>(
+     elem, indent ? std::optional<std::size_t>(0) : std::nullopt
+   );
+}
+
+}  // namespace js

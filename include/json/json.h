@@ -147,40 +147,33 @@ struct Enum : std::variant<js::Cst<VALUES>...> {
    std::string_view operator*() const { return *this; }
 };
 
-}  // namespace js
-
-#include "json.inl"
-
-#include "number.inl"
-#include "boolean.inl"
-#include "string.inl"
-#include "array.inl"
-#include "vector.inl"
-#include "struct.inl"
-#include "variant.inl"
-#include "constant.inl"
-
-namespace js {
+template <class TYPE>
+TYPE Parse(std::string_view json) noexcept(false);
 
 template <class TYPE>
-static constexpr TYPE
-Parse(std::string_view json) noexcept(false) {
-   return Serializer<TYPE>::Parse(json).first;
-}
+std::tuple<TYPE, std::string_view> Pparse(std::string_view json) noexcept(false);
 
-template <class TYPE>
-static constexpr std::tuple<TYPE, std::string_view>
-Pparse(std::string_view json) noexcept(false) {
-   return Serializer<TYPE>::Parse(json);
-}
+template <class TYPE, std::size_t INDENT_SIZE = 3, bool INDENT_SPACE = true>
+std::string Stringify2(TYPE const& elem, bool indent = false) noexcept(false);
 
 template <std::size_t INDENT_SIZE = 3, bool INDENT_SPACE = true>
-static constexpr std::string
-Stringify(auto const& elem, bool indent = false) noexcept(false) {
-   return Serializer<std::remove_cvref_t<decltype(elem)>>::
-     template Stringify<INDENT_SIZE, INDENT_SPACE>(
-       elem, indent ? std::optional<std::size_t>(0) : std::nullopt
-     );
+std::string constexpr Stringify(auto const& elem, bool indent = false) noexcept(false) {
+   return Stringify2<std::remove_cvref_t<decltype(elem)>, INDENT_SIZE, INDENT_SPACE>(elem, indent);
+}
+
+template <class TYPE>
+static constexpr void
+JsonImpl() {
+   Parse<TYPE>("");
+   Pparse<TYPE>("");
+   Stringify2<TYPE, 1, true>(std::declval<TYPE>(), false);
+   Stringify2<TYPE, 2, true>(std::declval<TYPE>(), false);
+   Stringify2<TYPE, 3, true>(std::declval<TYPE>(), false);
+   Stringify2<TYPE, 4, true>(std::declval<TYPE>(), false);
+   Stringify2<TYPE, 1, false>(std::declval<TYPE>(), false);
+   Stringify2<TYPE, 2, false>(std::declval<TYPE>(), false);
+   Stringify2<TYPE, 3, false>(std::declval<TYPE>(), false);
+   Stringify2<TYPE, 4, false>(std::declval<TYPE>(), false);
 }
 
 }  // namespace js
