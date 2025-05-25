@@ -129,7 +129,7 @@ struct Serializer<T, DRY_RUN> {
       bool end    = false;
       auto result = [&]<std::size_t... INDEX>(std::index_sequence<INDEX...>) constexpr {
          return std::tuple{[&]() constexpr {
-            using ElemType = std::tuple_element_t<INDEX, T>;
+            using ElemType = std::remove_cvref_t<std::tuple_element_t<INDEX, T>>;
             using Return   = std::conditional_t<DRY_RUN, std::optional<ElemType>, ElemType>;
             if constexpr (IS_OPTIONAL<ElemType>) {
                if (end) {
