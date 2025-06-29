@@ -23,7 +23,7 @@ SOFTWARE.
 */
 #pragma once
 
-#include "json.h"
+#include "json.inl"
 
 #include "exceptions.h"
 
@@ -34,13 +34,6 @@ SOFTWARE.
 #include <variant>
 
 namespace js {
-
-template <class T>
-struct IsVariant : std::false_type {};
-template <class... T>
-struct IsVariant<std::variant<T...>> : std::true_type {};
-template <class T>
-static constexpr bool IS_VARIANT = IsVariant<T>::value;
 
 template <class T, bool DRY_RUN>
    requires(IS_VARIANT<T>)

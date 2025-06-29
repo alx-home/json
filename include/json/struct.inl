@@ -24,7 +24,7 @@ SOFTWARE.
 
 #pragma once
 
-#include "json.h"
+#include "json.inl"
 
 #include <optional>
 #include <stdexcept>
@@ -35,31 +35,6 @@ SOFTWARE.
 #include <utility>
 
 namespace js {
-
-template <typename>
-struct IsMemptr : std::false_type {};
-template <typename T>
-struct IsMemptr<std::pair<std::string, T>> : std::true_type {};
-
-template <class T, class M>
-concept is_member_pointer = requires(T t, M m) {
-   IsMemptr<M>::value;
-   t.*(m.second);
-};
-
-template <bool>
-struct is_true;
-
-template <>
-struct is_true<true> : std::true_type {};
-
-template <class T>
-concept is_reflectable = requires {
-   is_tuple<std::remove_cvref_t<decltype(T::PROTOTYPE)>>;
-   is_true<([]<std::size_t... N>(std::index_sequence<N...>) consteval {
-      return (is_member_pointer<T, decltype(std::get<N>(T::PROTOTYPE))> && ...);
-   }(std::make_index_sequence<std::tuple_size_v<decltype(T::PROTOTYPE)>>()))>::value;
-};
 
 template <class T, bool DRY_RUN>
    requires(is_reflectable<T> && std::is_default_constructible_v<T>)

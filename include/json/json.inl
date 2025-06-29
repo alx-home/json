@@ -29,53 +29,8 @@ SOFTWARE.
 
 #include <optional>
 #include <tuple>
-#include <type_traits>
 
 namespace js {
-
-template <class T>
-struct IsTupleT : std::false_type {};
-
-template <class... T>
-struct IsTupleT<std::tuple<T...>> : std::true_type {};
-
-template <class T>
-concept is_tuple = requires { IsTupleT<T>::value; };
-
-template <class T>
-struct IsOptional : std::false_type {};
-template <class T>
-struct IsOptional<std::optional<T>> : std::true_type {};
-template <class T>
-static constexpr bool IS_OPTIONAL = IsOptional<std::remove_cvref_t<T>>::value;
-
-template <class T>
-struct OptionalValueT {
-   using type = T;
-};
-
-template <class T>
-   requires(IS_OPTIONAL<T>)
-struct OptionalValueT<T> {
-   using type = typename T::value_type;
-};
-
-template <class T>
-using OptionalValue = typename OptionalValueT<T>::type;
-
-template <class T>
-struct OptionalValueHelper {
-   using type = T;
-};
-
-template <class T>
-   requires(IS_OPTIONAL<T>)
-struct OptionalValueHelper<T> {
-   using type = typename T::value_type;
-};
-
-template <class T>
-using OPTIONAL_VALUE_HELPER = typename OptionalValueHelper<T>::type;
 
 template <std::size_t INDENT_SIZE, bool INDENT_SPACE, bool CONTAINER = false>
 static constexpr auto
@@ -93,6 +48,8 @@ NextIndent(std::optional<std::size_t> indent) {
 }
 
 }  // namespace js
+
+#include "concepts.inl"
 
 template <class TYPE, utils::String... VALUES2>
 [[nodiscard]] constexpr auto

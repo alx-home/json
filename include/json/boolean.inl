@@ -28,6 +28,7 @@ SOFTWARE.
 #include "exceptions.h"
 
 #include <ios>
+#include <optional>
 #include <sstream>
 #include <string_view>
 #include <type_traits>

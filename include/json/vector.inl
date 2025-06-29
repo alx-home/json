@@ -24,7 +24,7 @@ SOFTWARE.
 
 #pragma once
 
-#include "json.h"
+#include "json.inl"
 
 #include <optional>
 #include <string_view>
@@ -32,9 +32,6 @@ SOFTWARE.
 #include <utility>
 
 namespace js {
-
-template <class T>
-concept is_resizable = requires(T a) { a.emplace_back(std::declval<typename T::value_type>()); };
 
 template <class T, bool DRY_RUN>
    requires(is_resizable<T> && !std::is_same_v<T, std::string>)

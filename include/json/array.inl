@@ -24,19 +24,24 @@ SOFTWARE.
 
 #pragma once
 
-#include "json.h"
+#include "array.inl"
+#include "json.inl"
 
 #include <format>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <tuple>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 namespace js {
 
 template <class T>
-concept is_indexable = requires() { std::tuple_size_v<T>; };
+concept is_indexable = requires(T t) {
+   { std::tuple_cat(t) };
+};
 
 template <bool RESULT, class... T>
 struct SparseOptionalHelper;
@@ -51,19 +56,17 @@ struct SparseOptionalHelper<true, T, OTHER...>
        IS_OPTIONAL<T> ? (IS_OPTIONAL<OTHER>&&...) : SparseOptionalHelper<true, OTHER...>::value> {};
 
 template <class T>
-struct SparseOptional;
+struct SparseOptional : std::true_type {};
+
 template <class... T>
 struct SparseOptional<std::tuple<T...>>
    : std::bool_constant<SparseOptionalHelper<true, T...>::value> {};
 
 template <class T>
-concept not_sparse_optional = requires(T a) {
-   { std::tuple_size_v<T> };
-   { SparseOptional<T>::value };
-};
+concept not_sparse_optional = SparseOptional<T>::value;
 
 template <class T, bool DRY_RUN>
-   requires(is_indexable<T> && !std::is_same_v<T, std::string> && not_sparse_optional<T>)
+   requires(is_indexable<T> && not_sparse_optional<T>)
 struct Serializer<T, DRY_RUN> {
    enum SearchType { OPENING, CLOSING, NEXT };
 
@@ -125,8 +128,9 @@ struct Serializer<T, DRY_RUN> {
          json = Find<OPENING>(json);
       }
 
-      bool error  = false;
-      bool end    = false;
+      bool error = false;
+      bool end   = false;
+
       auto result = [&]<std::size_t... INDEX>(std::index_sequence<INDEX...>) constexpr {
          return std::tuple{[&]() constexpr {
             using ElemType = std::remove_cvref_t<std::tuple_element_t<INDEX, T>>;
@@ -184,8 +188,10 @@ struct Serializer<T, DRY_RUN> {
          }()...};
       }(std::make_index_sequence<std::tuple_size_v<T>>());
 
-      if constexpr (DRY_RUN && error) {
-         return std::nullopt;
+      if constexpr (DRY_RUN) {
+         if (error) {
+            return std::nullopt;
+         }
       }
 
       if constexpr (DRY_RUN) {
@@ -198,7 +204,17 @@ struct Serializer<T, DRY_RUN> {
          json = Find<CLOSING>(json);
       }
 
-      return {result, json};
+      if constexpr (DRY_RUN) {
+         return Return{
+           [&]<std::size_t... INDEX>(std::index_sequence<INDEX...>) constexpr -> T {
+              return {*std::get<INDEX>(result)...};
+           }(std::make_index_sequence<std::tuple_size_v<T>>()),
+           json
+         };
+
+      } else {
+         return Return{result, json};
+      }
    }
 
    template <std::size_t INDENT_SIZE, bool INDENT_SPACE>
