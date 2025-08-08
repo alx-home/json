@@ -28,6 +28,8 @@ SOFTWARE.
 #include <iomanip>
 #include <ios>
 #include <optional>
+#include <utility>
+#include <variant>
 #undef min
 
 #include "exceptions.h"
@@ -260,7 +262,24 @@ struct Serializer<T, DRY_RUN> {
          if (auto opt_result = ParseString(json, quote); !opt_result) {
             return std::nullopt;
          } else {
-            std::tie(json, result) = *opt_result;
+            if constexpr (IS_ENUM<T>) {
+               if ([&]<std::size_t... INDEX>(std::index_sequence<INDEX...>) constexpr {
+                      return (
+                        (std::string_view{
+                           std::variant_alternative_t<INDEX, typename T::VARIANT_TYPE>::VALUE.value_
+                             .data()
+                         }
+                         == opt_result->second)
+                        || ...
+                      );
+                   }(std::make_index_sequence<std::variant_size_v<typename T::VARIANT_TYPE>>())) {
+                  std::tie(json, result) = *opt_result;
+               } else {
+                  return std::nullopt;
+               }
+            } else {
+               std::tie(json, result) = *opt_result;
+            }
          }
       } else {
          std::tie(json, result) = ParseString(json, quote);

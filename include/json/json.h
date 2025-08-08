@@ -103,6 +103,8 @@ struct Cst {
 template <utils::String... VALUES>
    requires(sizeof...(VALUES) > 0)
 struct Enum : std::variant<js::Cst<VALUES>...> {
+   using VARIANT_TYPE = std::variant<js::Cst<VALUES>...>;
+
    Enum(char const* value)
       : Enum(std::string_view{value}) {}
 
@@ -145,6 +147,15 @@ struct Enum : std::variant<js::Cst<VALUES>...> {
 
    std::string_view operator*() const { return *this; }
 };
+
+template <class>
+struct IsEnum : std::false_type {};
+
+template <utils::String... VALUES>
+struct IsEnum<Enum<VALUES...>> : std::true_type {};
+
+template <class TYPE>
+static constexpr bool IS_ENUM = IsEnum<std::remove_cvref_t<TYPE>>::value;
 
 template <class TYPE>
 TYPE Parse(std::string_view json) noexcept(false);
