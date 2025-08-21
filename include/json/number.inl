@@ -183,9 +183,16 @@ struct Serializer<T, DRY_RUN> {
 
    template <std::size_t INDENT_SIZE, bool INDENT_SPACE>
    static constexpr std::string Stringify(T const& elem, std::optional<std::size_t>) noexcept {
-      std::stringstream     ss;
-      static constexpr auto MAX_PRECISION{std::numeric_limits<long double>::digits10 + 1};
-      ss << std::scientific << std::setprecision(MAX_PRECISION) << elem;
+      std::stringstream ss;
+
+      if constexpr (std::is_floating_point_v<std::remove_cvref_t<T>>) {
+         static constexpr auto MAX_PRECISION{
+           std::numeric_limits<std::remove_cvref_t<T>>::digits10 + 1
+         };
+         ss << std::setprecision(MAX_PRECISION) << std::defaultfloat << elem;
+      } else {
+         ss << elem;
+      }
       return ss.str();
    }
 };
