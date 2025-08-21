@@ -37,8 +37,8 @@ static constexpr auto
 NextIndent(std::optional<std::size_t> indent) {
    auto const indent_str =
      std::string(std::size_t{indent ? *indent : 0}, INDENT_SPACE ? ' ' : '\t');
-   auto const next_indent_size = indent ? *indent + INDENT_SIZE : 0;
-   auto const next_indent      = std::string(next_indent_size, INDENT_SPACE ? ' ' : '\t');
+   auto const next_indent_size = indent ? *indent + INDENT_SIZE : indent;
+   auto const next_indent = indent ? std::string(*next_indent_size, INDENT_SPACE ? ' ' : '\t') : "";
 
    return std::make_tuple(
      (CONTAINER && indent) ? "\n" + indent_str : indent_str,
