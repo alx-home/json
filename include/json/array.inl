@@ -213,7 +213,15 @@ struct Serializer<T, DRY_RUN> {
          };
 
       } else {
-         return Return{result, json};
+         return Return{
+           std::apply(
+             []<class... T2>(T2&&... x) constexpr {
+                return std::remove_cvref_t<T>{std::forward<T2>(x)...};
+             },
+             std::move(result)
+           ),
+           json
+         };
       }
    }
 
