@@ -100,7 +100,7 @@ struct Serializer<T, DRY_RUN> {
          }
       }
 
-      return {{it, json.end()}, std::distance(json.begin(), it)};
+      return {{it, json.end()}, static_cast<std::size_t>(std::distance(json.begin(), it))};
    }
 
    using Return = std::pair<T, std::string_view>;

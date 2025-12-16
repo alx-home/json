@@ -39,8 +39,8 @@ SOFTWARE.
 namespace js {
 
 template <class T>
-concept is_indexable = requires(T t) {
-   { std::tuple_cat(t) };
+concept is_indexable = requires {    
+   typename std::tuple_size<T>::type;
 };
 
 template <bool RESULT, class... T>
