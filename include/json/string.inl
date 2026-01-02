@@ -23,7 +23,8 @@ SOFTWARE.
 */
 
 #pragma once
-#include <algorithm>
+#include "concepts.inl"
+
 #include <format>
 #include <iomanip>
 #include <ios>
@@ -44,7 +45,7 @@ SOFTWARE.
 namespace js {
 
 template <class T, bool DRY_RUN>
-   requires(std::is_constructible_v<std::remove_cvref_t<T>, std::string> && std::is_constructible_v<std::string_view, std::remove_cvref_t<T>>)
+   requires(IS_STRING<T>)
 struct Serializer<T, DRY_RUN> {
    static constexpr std::conditional_t<DRY_RUN, std::optional<std::string_view>, std::string_view>
    FindOpening(std::string_view json, char& quote) noexcept(DRY_RUN) {

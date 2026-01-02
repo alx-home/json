@@ -69,6 +69,7 @@ operator<=>(TYPE const& lhs, js::Enum<VALUES2...> const& rhs) noexcept {
 #include "array.inl"
 #include "vector.inl"
 #include "struct.inl"
+#include "map.inl"
 #include "variant.inl"
 #include "constant.inl"
 

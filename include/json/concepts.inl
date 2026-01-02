@@ -109,5 +109,17 @@ concept is_reflectable = requires {
 
 template <class T>
 concept is_resizable = requires(T a) { a.emplace_back(std::declval<typename T::value_type>()); };
+template <typename T>
+static constexpr bool IS_STRING =
+  std::is_constructible_v<std::remove_cvref_t<T>, std::string>
+  && std::is_constructible_v<std::string_view, std::remove_cvref_t<T>>;
 
+template <typename T>
+concept is_map = requires(T t, T const CONST_T, typename T::key_type k) {
+   typename T::key_type;
+   typename T::mapped_type;
+   IS_STRING<typename T::key_type>;
+   { t[k] } -> std::same_as<typename T::mapped_type&>;
+   { CONST_T.find(k) } -> std::same_as<typename T::const_iterator>;
+};
 }  // namespace js
