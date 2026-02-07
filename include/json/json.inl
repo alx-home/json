@@ -63,6 +63,7 @@ operator<=>(TYPE const& lhs, js::Enum<VALUES2...> const& rhs) noexcept {
    return lhs <=> static_cast<std::string_view>(rhs);
 }
 
+#include "null.inl"
 #include "number.inl"
 #include "boolean.inl"
 #include "string.inl"

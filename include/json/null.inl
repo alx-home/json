@@ -59,12 +59,12 @@ struct Serializer<T, DRY_RUN> {
          if constexpr (DRY_RUN) {
             return std::nullopt;
          } else {
-            throw ParsingError("Invalid boolean value", json);
+            throw ParsingError("Invalid null value", json);
          }
       }
 
       if (json.substr(0, 4) == "null") {
-         return Return{{}, json};
+         return Return{{}, std::string_view{std::next(json.begin(), 4), json.end()}};
       }
 
       if constexpr (DRY_RUN) {

@@ -91,7 +91,7 @@ class Serializable {
 template <class T, bool DRY_RUN = false>
 struct Serializer;
 
-using null = nullptr_t;
+struct null {};
 
 template <utils::String STRING>
 struct Cst {
