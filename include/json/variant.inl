@@ -67,7 +67,7 @@ struct Serializer<T, DRY_RUN> {
          }
       }
 
-      return {result, json};
+      return Return{result, json};
    }
 
    template <std::size_t INDENT_SIZE, bool INDENT_SPACE>
