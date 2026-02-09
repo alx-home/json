@@ -114,6 +114,18 @@ auto [first, rest] = js::Pparse<int>("1 2 3");
 auto [second, rest2] = js::Pparse<int>(rest);
 ```
 
+## Explicit instantiation
+
+Use `js::JsonImpl<T>()` to force code generation for `Parse`, `Pparse`, and
+`Stringify2` for a specific type in one translation unit. Include
+`json/json.inl` in the `.cpp` that performs the instantiation.
+
+```cpp
+#include <json/json.inl>
+
+template void js::JsonImpl<ws::msg::HelloWorld>();
+```
+
 ## Errors
 
 Parsing throws `js::ParsingError` with a message and location when input is invalid.
