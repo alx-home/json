@@ -123,7 +123,34 @@ Use `js::JsonImpl<T>()` to force code generation for `Parse`, `Pparse`, and
 ```cpp
 #include <json/json.inl>
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-function"
+
 template void js::JsonImpl<ws::msg::HelloWorld>();
+
+#pragma clang diagnostic pop
+```
+
+Other compilers can use equivalent pragmas around the include and instantiation:
+
+```cpp
+#include <json/json.inl>
+
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+#elif defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4505) // unreferenced local function removed
+#endif
+
+template void js::JsonImpl<ws::msg::HelloWorld>();
+
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#elif defined(_MSC_VER)
+#pragma warning(pop)
+#endif
 ```
 
 ## Errors
