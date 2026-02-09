@@ -9,7 +9,9 @@ Define a struct prototype, then `js::Parse` and `js::Stringify` do the rest.
 
 - Parse and stringify structs with `PROTOTYPE` member mappings.
 - Supports `std::string`, numbers, `bool`, `js::null`.
-- Containers: `std::vector`, `std::map` (string keys), tuples/arrays.
+- Containers via concepts: works with any equivalent string, map, and
+  resizable sequence types (for example `std::string`, `std::map`,
+  `std::unordered_map`, `std::vector`), plus tuples/arrays.
 - Optional fields with `std::optional`.
 - `std::variant` support for union types.
 - String enums with `js::Enum<"a", "b">`.
