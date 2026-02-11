@@ -198,21 +198,18 @@ struct Serializer<T, DRY_RUN> {
          }
       }
 
-      uint32_t    code{0};
-      std::size_t shift{0};
-      auto const  end = json.begin() + 4;
-      auto        it  = json.begin();
+      uint32_t   code{0};
+      auto const end = json.begin() + 4;
+      auto       it  = json.begin();
 
-      for (; it != end; ++it, shift += 8) {
+      for (; it != end; ++it) {
+         uint32_t value{0};
          if (*it >= '0' && *it <= '9') {
-            code <<= shift;
-            code |= (*it - '0');
+            value = static_cast<uint32_t>(*it - '0');
          } else if (*it >= 'a' && *it <= 'f') {
-            code <<= shift;
-            code |= 0xa + (*it - 'a');
+            value = 0xa + static_cast<uint32_t>(*it - 'a');
          } else if (*it >= 'A' && *it <= 'F') {
-            code <<= shift;
-            code |= 0xa + (*it - 'a');
+            value = 0xa + static_cast<uint32_t>(*it - 'A');
          } else {
             if constexpr (DRY_RUN) {
                return std::nullopt;
@@ -220,9 +217,9 @@ struct Serializer<T, DRY_RUN> {
                throw ParsingError("Invalid unicode sequence", json);
             }
          }
-      }
 
-      assert(shift == 24);
+         code = (code << 4) | value;
+      }
       if constexpr (DRY_RUN) {
          if (auto result = UnicodeUtf8(code, json); result) {
             return StringReturn{{it, json.end()}, *result};
