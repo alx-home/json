@@ -73,21 +73,13 @@ struct Serializer<T, DRY_RUN> {
    template <std::size_t INDENT_SIZE, bool INDENT_SPACE>
    static constexpr std::string
    Stringify(T const& elem, std::optional<std::size_t> indent) noexcept {
-      bool found = false;
-      return [&found, &indent]<class... TYPES>(std::variant<TYPES...> const& elem) constexpr {
-         return (
-           ([&found, &elem, &indent]<class TYPE>() constexpr -> std::string {
-              if (!found && std::holds_alternative<TYPE>(elem)) {
-                 found = true;
-                 return Serializer<TYPE>::template Stringify<INDENT_SIZE, INDENT_SPACE>(
-                   std::get<TYPE>(elem), indent
-                 );
-              }
-              return "";
-           }.template operator()<TYPES>())
-           + ...
-         );
-      }(elem);
+      return std::visit(
+        [&indent](auto const& x) constexpr {
+           using ElemType = std::remove_cvref_t<decltype(x)>;
+           return Serializer<ElemType>::template Stringify<INDENT_SIZE, INDENT_SPACE>(x, indent);
+        },
+        elem
+      );
    }
 };
 
