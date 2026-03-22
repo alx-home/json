@@ -43,7 +43,8 @@ struct Serializer<T, DRY_RUN> {
    static constexpr std::conditional_t<DRY_RUN, std::optional<Return>, Return> Parse(
      std::string_view json
    ) noexcept(DRY_RUN) {
-      T    result{};
+      Return result{};
+
       bool found = false;
       [&json, &found]<class... TYPES>(std::variant<TYPES...>& result) constexpr {
          (([&json, &found, &result]<class TYPE>() constexpr {
@@ -52,12 +53,13 @@ struct Serializer<T, DRY_RUN> {
              }
 
              if (auto opt_result = Serializer<TYPE, true>::Parse(json); opt_result) {
-                found                  = true;
-                std::tie(result, json) = *opt_result;
+                found  = true;
+                result = std::move(opt_result->first);
+                json   = opt_result->second;
              }
           }.template operator()<TYPES>()),
           ...);
-      }(result);
+      }(result.first);
 
       if (!found) {
          if constexpr (DRY_RUN) {
@@ -67,7 +69,8 @@ struct Serializer<T, DRY_RUN> {
          }
       }
 
-      return Return{result, json};
+      result.second = json;
+      return result;
    }
 
    template <std::size_t INDENT_SIZE, bool INDENT_SPACE>

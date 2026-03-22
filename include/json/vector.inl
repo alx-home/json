@@ -95,7 +95,7 @@ struct Serializer<T, DRY_RUN> {
          json = Find<OPENING>(json);
       }
 
-      T           result{};
+      Return      result{};
       std::size_t index = 0;
 
       while (true) {
@@ -123,7 +123,7 @@ struct Serializer<T, DRY_RUN> {
                auto& [value, next] = *opt_result;
                json                = next;
 
-               result.emplace_back(std::move(value));
+               result.first.emplace_back(std::move(value));
                ++index;
             } else {
                return std::nullopt;
@@ -132,12 +132,13 @@ struct Serializer<T, DRY_RUN> {
             auto const& [value, next] = Serializer<typename T::value_type, DRY_RUN>::Parse(json);
             json                      = next;
 
-            result.emplace_back(std::move(value));
+            result.first.emplace_back(std::move(value));
             ++index;
          }
       }
 
-      return Return{result, json};
+      result.second = json;
+      return result;
    }
 
    template <std::size_t INDENT_SIZE, bool INDENT_SPACE>

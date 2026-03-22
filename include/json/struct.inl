@@ -26,12 +26,12 @@ SOFTWARE.
 
 #include "json.inl"
 
+#include <map>
 #include <optional>
 #include <stdexcept>
 #include <string_view>
 #include <tuple>
 #include <type_traits>
-#include <unordered_set>
 #include <utility>
 
 namespace js {
@@ -107,16 +107,14 @@ struct Serializer<T, DRY_RUN> {
          json = Find<OPENING>(json);
       }
 
-      T                               result{};
-      std::unordered_set<std::string> keys{};
-      std::unordered_set<std::string> required_keys{};
+      Return result{};
+
+      std::map<std::string_view, bool> keys{};
       std::apply(
         [&](auto const&... members) {
            (
              [&](auto const& member) {
-                if constexpr (!IS_OPTIONAL<decltype(std::declval<T>().*member.second)>) {
-                   required_keys.emplace(member.first);
-                }
+                keys.emplace(member.first, IS_OPTIONAL<decltype(std::declval<T>().*member.second)>);
              }(members),
              ...
            );
@@ -124,6 +122,7 @@ struct Serializer<T, DRY_RUN> {
         T::PROTOTYPE
       );
 
+      bool first = true;
       while (true) {
          if (auto result = Serializer<T, true>::template Find<Serializer<T, true>::CLOSING>(json);
              result) {
@@ -131,7 +130,9 @@ struct Serializer<T, DRY_RUN> {
             break;
          }
 
-         if (keys.size()) {
+         if (first) {
+            first = false;
+         } else {
             if constexpr (DRY_RUN) {
                if (auto result = Find<NEXT>(json); result) {
                   json = *result;
@@ -146,7 +147,7 @@ struct Serializer<T, DRY_RUN> {
          std::string key;
          if constexpr (DRY_RUN) {
             if (auto result = Serializer<std::string, DRY_RUN>::Parse(json); result) {
-               std::tie(key, json) = *result;
+               std::tie(key, json) = std::move(*result);
             } else {
                return std::nullopt;
             }
@@ -154,11 +155,11 @@ struct Serializer<T, DRY_RUN> {
             std::tie(key, json) = Serializer<std::string, DRY_RUN>::Parse(json);
          }
 
-         if (!keys.emplace(key).second) {
+         if (!keys.erase(key)) {
             if constexpr (DRY_RUN) {
                return std::nullopt;
             } else {
-               throw ParsingError(std::format("Multiple value for key : \"{}\"", key), json);
+               throw ParsingError(std::format("Unexpected key : \"{}\"", key), json);
             }
          }
 
@@ -192,17 +193,17 @@ struct Serializer<T, DRY_RUN> {
                       found = true;
 
                       using ElemType =
-                        OptionalValue<std::remove_cvref_t<decltype(result.*member.second)>>;
+                        OptionalValue<std::remove_cvref_t<decltype(result.first.*member.second)>>;
 
                       if constexpr (DRY_RUN) {
                          if (auto opt_result = Serializer<ElemType, DRY_RUN>::Parse(json);
                              opt_result) {
-                            std::tie(result.*member.second, json) = *opt_result;
+                            std::tie(result.first.*member.second, json) = *opt_result;
                          } else {
                             error = true;
                          }
                       } else {
-                         std::tie(result.*member.second, json) =
+                         std::tie(result.first.*member.second, json) =
                            Serializer<ElemType, DRY_RUN>::Parse(json);
                       }
                    }
@@ -228,17 +229,20 @@ struct Serializer<T, DRY_RUN> {
          }
       }
 
-      for (auto const& key : required_keys) {
-         if (!keys.contains(key)) {
+      for (auto const& key : keys) {
+         if (!key.second) {
             if constexpr (DRY_RUN) {
                return std::nullopt;
             } else {
-               throw ParsingError(std::format("Missing object key : \"{}\"", key), json);
+               throw ParsingError(
+                 std::format("Missing required object key : \"{}\"", key.first), json
+               );
             }
          }
       }
 
-      return Return{result, std::string_view{json.begin(), json.end()}};
+      result.second = std::string_view{json.begin(), json.end()};
+      return result;
    }
 
    template <std::size_t INDENT_SIZE, bool INDENT_SPACE>

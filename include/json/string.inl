@@ -135,7 +135,7 @@ struct Serializer<T, DRY_RUN> {
                   if (auto result = ParseUnicode({it, json.end()}); !result) {
                      return std::nullopt;
                   } else {
-                     std::tie(json, unicode) = *result;
+                     std::tie(json, unicode) = std::move(*result);
                   }
                } else {
                   std::tie(json, unicode) = ParseUnicode({it, json.end()});
@@ -271,12 +271,12 @@ struct Serializer<T, DRY_RUN> {
                         || ...
                       );
                    }(std::make_index_sequence<std::variant_size_v<typename T::VARIANT_TYPE>>())) {
-                  std::tie(json, result) = *opt_result;
+                  std::tie(json, result) = std::move(*opt_result);
                } else {
                   return std::nullopt;
                }
             } else {
-               std::tie(json, result) = *opt_result;
+               std::tie(json, result) = std::move(*opt_result);
             }
          }
       } else {

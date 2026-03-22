@@ -39,9 +39,7 @@ SOFTWARE.
 namespace js {
 
 template <class T>
-concept is_indexable = requires {    
-   typename std::tuple_size<T>::type;
-};
+concept is_indexable = requires { typename std::tuple_size<T>::type; };
 
 template <bool RESULT, class... T>
 struct SparseOptionalHelper;
@@ -207,7 +205,7 @@ struct Serializer<T, DRY_RUN> {
       if constexpr (DRY_RUN) {
          return Return{
            [&]<std::size_t... INDEX>(std::index_sequence<INDEX...>) constexpr -> T {
-              return {*std::get<INDEX>(result)...};
+              return {std::move(*std::get<INDEX>(result))...};
            }(std::make_index_sequence<std::tuple_size_v<T>>()),
            json
          };
