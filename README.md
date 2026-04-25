@@ -1,4 +1,5 @@
 [![Build](https://github.com/alx-home/json/actions/workflows/build.yml/badge.svg)](https://github.com/alx-home/json/actions/workflows/build.yml)
+[![Quality Gate Status](https://sonarqube.alex-home.fr/api/project_badges/measure?project=alx-home_json_27394a2b-d6ee-4a71-8c9a-b28a2d20f56a&metric=alert_status&token=sqb_11ccb517037bd9cb2cc6198ab389cadab3ffd49c)](https://sonarqube.alex-home.fr/dashboard?id=alx-home_json_27394a2b-d6ee-4a71-8c9a-b28a2d20f56a)
 
 # alx-home json
 
