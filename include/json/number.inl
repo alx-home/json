@@ -48,59 +48,46 @@ struct Serializer<T, DRY_RUN> {
 
    static constexpr std::pair<std::string_view, std::size_t> Skip(std::string_view json) noexcept {
       auto it = json.begin();
-      for (; it != json.end(); ++it) {
+      for (bool should_continue = true; (it != json.end()) && should_continue; ++it) {
+         should_continue = false;
+
          if constexpr (SEARCH_TYPE == SPACE) {
             if (*it == ' ' || *it == '\t' || *it == '\n' || *it == '\r') {
-               continue;
+               should_continue = true;
             }
-
-            break;
          } else if constexpr (SEARCH_TYPE == ZERO) {
             if (*it == '0') {
                return {{std::next(it), json.end()}, 1};
             }
-
-            break;
          } else if constexpr (SEARCH_TYPE == NUMBER) {
             if (*it >= '0' && *it <= '9') {
-               continue;
+               should_continue = true;
             }
-
-            break;
          } else if constexpr (SEARCH_TYPE == NON_NULL_DIGIT) {
             if (*it > '0' && *it <= '9') {
                return {{std::next(it), json.end()}, 1};
             }
-
-            break;
          } else if constexpr (SEARCH_TYPE == EXPONENT) {
             if (*it == 'E' || *it == 'e') {
                return {{std::next(it), json.end()}, 1};
             }
-
-            break;
          } else if constexpr (SEARCH_TYPE == MINUS) {
             if (*it == '-') {
                return {{std::next(it), json.end()}, 1};
             }
-
-            break;
          } else if constexpr (SEARCH_TYPE == MINUS_PLUS) {
             if (*it == '-' || *it == '+') {
                return {{std::next(it), json.end()}, 1};
             }
-
-            break;
          } else {
             if (*it == '.') {
                return {{std::next(it), json.end()}, 1};
             }
-
-            break;
          }
       }
 
-      return {{it, json.end()}, static_cast<std::size_t>(std::distance(json.begin(), it))};
+      auto const skipped = static_cast<std::size_t>(std::distance(json.begin(), it));
+      return {{it, json.end()}, skipped};
    }
 
    using Return = std::pair<T, std::string_view>;

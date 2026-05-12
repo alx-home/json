@@ -98,8 +98,8 @@ struct Serializer<T, DRY_RUN> {
      std::string_view json
    ) noexcept(false) {
       if constexpr (DRY_RUN) {
-         if (auto result = Find<OPENING>(json); result) {
-            json = *result;
+         if (auto opening_result = Find<OPENING>(json); opening_result) {
+            json = *opening_result;
          } else {
             return std::nullopt;
          }
@@ -116,17 +116,19 @@ struct Serializer<T, DRY_RUN> {
              [&](auto const& member) {
                 keys.emplace(member.first, IS_OPTIONAL<decltype(std::declval<T>().*member.second)>);
              }(members),
-             ...
-           );
+             ...);
         },
         T::PROTOTYPE
       );
 
       bool first = true;
       while (true) {
-         if (auto result = Serializer<T, true>::template Find<Serializer<T, true>::CLOSING>(json);
-             result) {
-            json = *result;
+         if (
+           auto closing_result =
+             Serializer<T, true>::template Find<Serializer<T, true>::CLOSING>(json);
+           closing_result
+         ) {
+            json = *closing_result;
             break;
          }
 
@@ -134,8 +136,8 @@ struct Serializer<T, DRY_RUN> {
             first = false;
          } else {
             if constexpr (DRY_RUN) {
-               if (auto result = Find<NEXT>(json); result) {
-                  json = *result;
+               if (auto next_result = Find<NEXT>(json); next_result) {
+                  json = *next_result;
                } else {
                   return std::nullopt;
                }
@@ -146,8 +148,8 @@ struct Serializer<T, DRY_RUN> {
 
          std::string key;
          if constexpr (DRY_RUN) {
-            if (auto result = Serializer<std::string, DRY_RUN>::Parse(json); result) {
-               std::tie(key, json) = std::move(*result);
+            if (auto key_result = Serializer<std::string, DRY_RUN>::Parse(json); key_result) {
+               std::tie(key, json) = std::move(*key_result);
             } else {
                return std::nullopt;
             }
@@ -164,8 +166,8 @@ struct Serializer<T, DRY_RUN> {
          }
 
          if constexpr (DRY_RUN) {
-            if (auto result = Find<SEP>(json); result) {
-               json = *result;
+            if (auto sep_result = Find<SEP>(json); sep_result) {
+               json = *sep_result;
             } else {
                return std::nullopt;
             }
@@ -196,8 +198,9 @@ struct Serializer<T, DRY_RUN> {
                         OptionalValue<std::remove_cvref_t<decltype(result.first.*member.second)>>;
 
                       if constexpr (DRY_RUN) {
-                         if (auto opt_result = Serializer<ElemType, DRY_RUN>::Parse(json);
-                             opt_result) {
+                         if (
+                           auto opt_result = Serializer<ElemType, DRY_RUN>::Parse(json); opt_result
+                         ) {
                             std::tie(result.first.*member.second, json) = *opt_result;
                          } else {
                             error = true;
@@ -208,8 +211,7 @@ struct Serializer<T, DRY_RUN> {
                       }
                    }
                 }(members),
-                ...
-              );
+                ...);
            },
            T::PROTOTYPE
          );
@@ -284,8 +286,7 @@ struct Serializer<T, DRY_RUN> {
                              );
                 }
              }(members),
-             ...
-           );
+             ...);
         },
         T::PROTOTYPE
       );

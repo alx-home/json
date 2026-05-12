@@ -83,22 +83,22 @@ struct Serializer<T, DRY_RUN> {
 
       if (unicode <= 0x7F) {
          result.resize(1);
-         result[0] = unicode;
+         result[0] = static_cast<char>(unicode);
       } else if (unicode <= 0x7FF) {
          result.resize(2);
-         result[0] = (0xC0 | (unicode >> 6));
-         result[1] = (0x80 | (unicode & 0x3F));
+         result[0] = static_cast<char>(0xC0 | (unicode >> 6));
+         result[1] = static_cast<char>(0x80 | (unicode & 0x3F));
       } else if (unicode <= 0xFFFF) {
          result.resize(3);
-         result[0] = (0xE0 | (unicode >> 12));
-         result[1] = (0x80 | ((unicode >> 6) & 0x3F));
-         result[2] = (0x80 | (unicode & 0x3F));
+         result[0] = static_cast<char>(0xE0 | (unicode >> 12));
+         result[1] = static_cast<char>(0x80 | ((unicode >> 6) & 0x3F));
+         result[2] = static_cast<char>(0x80 | (unicode & 0x3F));
       } else if (unicode <= 0x10FFFF) {
          result.resize(4);
-         result[0] = (0xF0 | (unicode >> 18));
-         result[1] = (0x80 | ((unicode >> 12) & 0x3F));
-         result[2] = (0x80 | ((unicode >> 6) & 0x3F));
-         result[3] = (0x80 | (unicode & 0x3F));
+         result[0] = static_cast<char>(0xF0 | (unicode >> 18));
+         result[1] = static_cast<char>(0x80 | ((unicode >> 12) & 0x3F));
+         result[2] = static_cast<char>(0x80 | ((unicode >> 6) & 0x3F));
+         result[3] = static_cast<char>(0x80 | (unicode & 0x3F));
       } else {
          if constexpr (DRY_RUN) {
             return std::nullopt;
@@ -132,10 +132,10 @@ struct Serializer<T, DRY_RUN> {
                std::string unicode{};
 
                if constexpr (DRY_RUN) {
-                  if (auto result = ParseUnicode({it, json.end()}); !result) {
+                  if (auto unicode_result = ParseUnicode({it, json.end()}); !unicode_result) {
                      return std::nullopt;
                   } else {
-                     std::tie(json, unicode) = std::move(*result);
+                     std::tie(json, unicode) = std::move(*unicode_result);
                   }
                } else {
                   std::tie(json, unicode) = ParseUnicode({it, json.end()});
@@ -353,7 +353,8 @@ struct Serializer<T, DRY_RUN> {
    }
 
    template <std::size_t INDENT_SIZE, bool INDENT_SPACE>
-   static constexpr std::string Stringify(T const& elem, std::optional<std::size_t>) noexcept(false
+   static constexpr std::string Stringify(T const& elem, std::optional<std::size_t>) noexcept(
+     false
    ) {
       return "\"" + Serializer<T>::EscapeString(elem) + "\"";
    }
