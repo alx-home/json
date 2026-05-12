@@ -24,6 +24,10 @@ SOFTWARE.
 
 #pragma once
 
+#ifdef _MSC_VER
+#   pragma warning(disable : 4702)
+#endif
+
 #include "json.h"
 
 #include "exceptions.h"
@@ -48,12 +52,10 @@ struct Serializer<T, DRY_RUN> {
 
    static constexpr std::pair<std::string_view, std::size_t> Skip(std::string_view json) noexcept {
       auto it = json.begin();
-      for (bool should_continue = true; (it != json.end()) && should_continue; ++it) {
-         should_continue = false;
-
+      for (; it != json.end(); ++it) {
          if constexpr (SEARCH_TYPE == SPACE) {
             if (*it == ' ' || *it == '\t' || *it == '\n' || *it == '\r') {
-               should_continue = true;
+               continue;
             }
          } else if constexpr (SEARCH_TYPE == ZERO) {
             if (*it == '0') {
@@ -61,7 +63,7 @@ struct Serializer<T, DRY_RUN> {
             }
          } else if constexpr (SEARCH_TYPE == NUMBER) {
             if (*it >= '0' && *it <= '9') {
-               should_continue = true;
+               continue;
             }
          } else if constexpr (SEARCH_TYPE == NON_NULL_DIGIT) {
             if (*it > '0' && *it <= '9') {
@@ -84,8 +86,9 @@ struct Serializer<T, DRY_RUN> {
                return {{std::next(it), json.end()}, 1};
             }
          }
-      }
 
+         break;
+      }
       auto const skipped = static_cast<std::size_t>(std::distance(json.begin(), it));
       return {{it, json.end()}, skipped};
    }
