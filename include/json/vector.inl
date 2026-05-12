@@ -99,16 +99,19 @@ struct Serializer<T, DRY_RUN> {
       std::size_t index = 0;
 
       while (true) {
-         if (auto result = Serializer<T, true>::template Find<Serializer<T, true>::CLOSING>(json);
-             result) {
-            json = *result;
+         if (
+           auto closing_result =
+             Serializer<T, true>::template Find<Serializer<T, true>::CLOSING>(json);
+           closing_result
+         ) {
+            json = *closing_result;
             break;
          }
 
          if (index) {
             if constexpr (DRY_RUN) {
-               if (auto result = Find<NEXT>(json); result) {
-                  json = *result;
+               if (auto sep_result = Find<NEXT>(json); sep_result) {
+                  json = *sep_result;
                } else {
                   return std::nullopt;
                }
@@ -118,8 +121,9 @@ struct Serializer<T, DRY_RUN> {
          }
 
          if constexpr (DRY_RUN) {
-            if (auto opt_result = Serializer<typename T::value_type, DRY_RUN>::Parse(json);
-                opt_result) {
+            if (
+              auto opt_result = Serializer<typename T::value_type, DRY_RUN>::Parse(json); opt_result
+            ) {
                auto& [value, next] = *opt_result;
                json                = next;
 

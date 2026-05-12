@@ -24,7 +24,6 @@ SOFTWARE.
 
 #pragma once
 
-#include "array.inl"
 #include "json.inl"
 
 #include <format>
@@ -34,7 +33,6 @@ SOFTWARE.
 #include <tuple>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 namespace js {
 
@@ -131,17 +129,17 @@ struct Serializer<T, DRY_RUN> {
 
       auto result = [&]<std::size_t... INDEX>(std::index_sequence<INDEX...>) constexpr {
          return std::tuple{[&]() constexpr {
-            using ElemType = std::remove_cvref_t<std::tuple_element_t<INDEX, T>>;
-            using Return   = std::conditional_t<DRY_RUN, std::optional<ElemType>, ElemType>;
+            using ElemType  = std::remove_cvref_t<std::tuple_element_t<INDEX, T>>;
+            using OptReturn = std::conditional_t<DRY_RUN, std::optional<ElemType>, ElemType>;
             if constexpr (IS_OPTIONAL<ElemType>) {
                if (end) {
-                  return Return{std::nullopt};
+                  return OptReturn{std::nullopt};
                }
             }
 
             if constexpr (DRY_RUN) {
                if (error) {
-                  return Return{std::nullopt};
+                  return OptReturn{std::nullopt};
                }
             }
 
@@ -151,7 +149,7 @@ struct Serializer<T, DRY_RUN> {
                      json = *result;
                   } else {
                      error = true;
-                     return Return{std::nullopt};
+                     return OptReturn{std::nullopt};
                   }
                } else {
                   json = Find<NEXT>(json);
@@ -164,24 +162,24 @@ struct Serializer<T, DRY_RUN> {
                if (auto result = Serializer<SerializeType, true>::Parse(json); result) {
                   auto [value, next] = *result;
                   json               = next;
-                  return Return{std::move(value)};
+                  return OptReturn{std::move(value)};
                } else {
                   end = true;
-                  return Return{std::nullopt};
+                  return OptReturn{std::nullopt};
                }
             } else if constexpr (DRY_RUN) {
                if (auto opt_result = Serializer<SerializeType, DRY_RUN>::Parse(json); opt_result) {
                   auto [value, next] = *opt_result;
                   json               = next;
-                  return Return{std::move(value)};
+                  return OptReturn{std::move(value)};
                } else {
                   error = true;
-                  return Return{std::nullopt};
+                  return OptReturn{std::nullopt};
                }
             } else {
                auto [value, next] = Serializer<SerializeType, DRY_RUN>::Parse(json);
                json               = next;
-               return Return{std::move(value)};
+               return OptReturn{std::move(value)};
             }
          }()...};
       }(std::make_index_sequence<std::tuple_size_v<T>>());
@@ -193,8 +191,8 @@ struct Serializer<T, DRY_RUN> {
       }
 
       if constexpr (DRY_RUN) {
-         if (auto result = Find<CLOSING>(json); result) {
-            json = *result;
+         if (auto closing_result = Find<CLOSING>(json); closing_result) {
+            json = *closing_result;
          } else {
             return std::nullopt;
          }
